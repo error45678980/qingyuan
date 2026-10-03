@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}泡泡墙 · 情感泡泡{% endblock %}
+{% block content %}
+<div class="filter-bar">
+  <a class="chip {{ 'active' if not current_emotion }}" href="{{ url_for('index') }}">全部</a>
+  {% for e in all_emotions %}
+    <a class="chip {{ 'active' if current_emotion == e }}" href="{{ url_for('index', emotion=e) }}">{{ emotion_icons[e] }} {{ e }}</a>
+  {% endfor %}
+</div>
+
+<div id="bubble-grid" class="grid">
+  {% include '_bubbles.html' %}
+</div>
+
+<a class="fab" href="{{ url_for('publish_page') }}">＋</a>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const partialUrl = "{{ url_for('partial_bubbles', emotion=current_emotion) if current_emotion else url_for('partial_bubbles') }}";
+  setInterval(async function () {
+    try {
+      const res = await fetch(partialUrl);
+      if (res.ok) {
+        document.getElementById('bubble-grid').innerHTML = await res.text();
+      }
+    } catch (e) {}
+  }, 3000);
+</script>
+{% endblock %}

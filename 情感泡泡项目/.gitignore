@@ -1,0 +1,36 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# ===== 敏感配置（切勿提交，含 SECRET_KEY / 邀请码）=====
+config/secrets.local.py
+
+# ===== 运行时数据 =====
+*.db
+*.sqlite
+*.sqlite3
+server_data/
+
+# ===== 日志 =====
+*.log
+app_log.txt
+server_log.txt
+client_debug.log
+server_debug.log
+
+# ===== 编辑器 / 系统 =====
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ===== 测试与覆盖率 =====
+.pytest_cache/
+.coverage
+htmlcov/

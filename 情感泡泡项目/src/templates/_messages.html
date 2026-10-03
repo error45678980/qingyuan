@@ -1,0 +1,13 @@
+{% for m in messages %}
+<div class="msg {{ 'me' if m['sender_nickname'] == current_user['username'] else 'other' }}">
+  <div class="msg-bubble">
+    {% if m['sender_nickname'] != current_user['username'] %}
+      <div class="msg-name">{{ m['sender_nickname'] }}</div>
+    {% endif %}
+    <div class="msg-content">{{ m['content'] }}</div>
+    <div class="msg-time">{{ m['created_at'][5:16].replace('T', ' ') }}</div>
+  </div>
+</div>
+{% else %}
+<div class="muted center">还没有消息，打个招呼吧 👋</div>
+{% endfor %}

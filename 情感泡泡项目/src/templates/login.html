@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block title %}登录 · 情感泡泡{% endblock %}
+{% block content %}
+<div class="auth-card card">
+  <h1 class="auth-logo">💭 情感泡泡</h1>
+  <p class="auth-sub">找到你心中的那份缘分</p>
+
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+
+  <div class="tabs">
+    <button id="tab-login" class="tab" type="button" onclick="showTab('login')">登录</button>
+    <button id="tab-register" class="tab" type="button" onclick="showTab('register')">注册</button>
+  </div>
+
+  <form id="login-form" method="post" action="{{ url_for('login') }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+    <input class="input" name="username" placeholder="用户名" required>
+    <input class="input" type="password" name="password" placeholder="密码" required>
+    <button class="btn-primary btn-block" type="submit">登 录</button>
+  </form>
+
+  <form id="register-form" method="post" action="{{ url_for('register') }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+    <input class="input" name="username" placeholder="用户名（即公屏昵称）" required>
+    <input class="input" type="password" name="password" placeholder="密码（至少 6 位）" required>
+    <input class="input" name="invite_code" placeholder="邀请码" required>
+    <button class="btn-primary btn-block" type="submit">注 册</button>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function showTab(t) {
+    document.getElementById('login-form').classList.toggle('hidden', t !== 'login');
+    document.getElementById('register-form').classList.toggle('hidden', t !== 'register');
+    document.getElementById('tab-login').classList.toggle('active', t === 'login');
+    document.getElementById('tab-register').classList.toggle('active', t === 'register');
+  }
+  showTab('{{ active_tab }}');
+</script>
+{% endblock %}

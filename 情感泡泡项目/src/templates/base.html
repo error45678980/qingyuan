@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}情感泡泡{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  {% if current_user %}
+  <nav class="navbar">
+    <a class="brand" href="{{ url_for('index') }}">💭 情感泡泡</a>
+    <div class="nav-links">
+      <a href="{{ url_for('index') }}">泡泡墙</a>
+      <a href="{{ url_for('chats_page') }}">我的对话</a>
+      <span class="nav-user">👤 {{ current_user['username'] }}</span>
+      <form method="post" action="{{ url_for('logout') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn-ghost">登出</button>
+      </form>
+    </div>
+  </nav>
+  {% endif %}
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-wrap">
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

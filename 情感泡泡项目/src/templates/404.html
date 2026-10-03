@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block title %}找不到 · 情感泡泡{% endblock %}
+{% block content %}
+<div class="center">
+  <div class="empty big">🫧 这个泡泡不存在，或已经炸掉消失了</div>
+  <a class="btn-primary" href="{{ url_for('index') }}">回到泡泡墙</a>
+</div>
+{% endblock %}
