@@ -125,12 +125,19 @@ def chrome_shot(html_path: Path, out: Path, width: int, height: int, scale: int 
         f"--screenshot={out}", html_path.as_uri(),
     ]
     proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    ok = False
+    ok, last, stable = False, -1, 0
     for _ in range(120):                     # 最多等 30 秒
-        if out.exists() and out.stat().st_size > 1000:
-            time.sleep(0.4)                  # 让写盘落定
-            ok = out.stat().st_size > 1000
-            break
+        if out.exists():
+            size = out.stat().st_size
+            # 等文件大小连续两次不变，说明写完了（不能只看大小阈值，小图会误判）
+            if size > 0 and size == last:
+                stable += 1
+                if stable >= 2:
+                    ok = True
+                    break
+            else:
+                stable = 0
+            last = size
         time.sleep(0.25)
     proc.terminate()
     shutil.rmtree(profile, ignore_errors=True)
