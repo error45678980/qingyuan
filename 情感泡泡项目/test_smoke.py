@@ -8,8 +8,23 @@ import tempfile
 _tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
 _tmp.close()
 os.environ["EMOTION_BUBBLE_DB"] = _tmp.name
+# 关键：显式清空 DATABASE_URL，防止回落到 secrets.local.py 里的生产 Neon 连接串。
+# 同时显式提供测试专用的密钥/邀请码，测试完全不读 secrets 文件。
+os.environ["DATABASE_URL"] = ""
+os.environ["SECRET_KEY"] = "test-secret-not-for-production"
+os.environ["INVITE_CODE"] = "TEST-INVITE-CODE"
 
 from src.server_app import app  # noqa: E402
+
+
+def assert_sqlite_backend():
+    """测试必须跑在本地 SQLite 上，绝不能误连生产库。"""
+    with app.app_context():
+        from src.db import get_db
+        backend = type(get_db()).__module__
+        assert backend == "src.database", (
+            f"冒烟测试必须使用 SQLite，实际后端是 {backend}（疑似连了生产库！）"
+        )
 
 
 def get_csrf(resp):
@@ -29,6 +44,7 @@ def conv_id_for(bubble_id, helper):
 
 
 def main():
+    assert_sqlite_backend()
     client = app.test_client()
     INVITE = app.config["INVITE_CODE"]
 

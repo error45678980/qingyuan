@@ -87,8 +87,10 @@ def _get_server_db_path():
 
 
 def _load_secret(name, default=""):
+    # 环境变量优先；显式设置（包括空串）都被尊重，允许用空串“强制关闭”某项配置，
+    # 避免回落进 secrets.local.py（例如测试想关掉 DATABASE_URL 时）。
     val = os.environ.get(name)
-    if val:
+    if val is not None:
         return val
     secrets_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "config", "secrets.local.py")
@@ -102,8 +104,20 @@ def _load_secret(name, default=""):
 
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = _load_secret("SECRET_KEY", "dev-secret-change-me")
+app.config["SECRET_KEY"] = _load_secret("SECRET_KEY", "")
 app.config["INVITE_CODE"] = _load_secret("INVITE_CODE", "")
+# 失效即拒绝启动（fail-closed）：绝不带不安全的默认值上线。
+# SECRET_KEY 缺失会让会话可被伪造；INVITE_CODE 缺失会让注册对空邀请码放行。
+if not app.config["SECRET_KEY"]:
+    raise RuntimeError(
+        "缺少 SECRET_KEY：请在 config/secrets.local.py 中设置，或用环境变量 SECRET_KEY 提供。"
+        "（拒绝以不安全的默认值启动）"
+    )
+if not app.config["INVITE_CODE"]:
+    raise RuntimeError(
+        "缺少 INVITE_CODE：本应用为邀请制，请在 config/secrets.local.py 中设置邀请码，"
+        "或用环境变量 INVITE_CODE 提供。"
+    )
 app.config["DB_PATH"] = _get_server_db_path()
 app.config["DATABASE_URL"] = _load_secret("DATABASE_URL", "")
 # 跑在 Cloudflare Tunnel 等反向代理后面：让 Flask 正确识别 https 与真实客户端 IP。
