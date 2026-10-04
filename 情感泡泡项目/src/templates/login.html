@@ -13,11 +13,6 @@
 
     {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
 
-    <div class="tabs">
-      <button id="tab-login" class="tab" type="button" onclick="showTab('login')">登录</button>
-      <button id="tab-register" class="tab" type="button" onclick="showTab('register')">注册</button>
-    </div>
-
     <form id="login-form" method="post" action="{{ url_for('login') }}">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
       <input class="input" name="username" placeholder="用户名" required>
@@ -38,11 +33,14 @@
 
 {% block scripts %}
 <script>
+  // 切换入口现在在顶栏（base.html 的 .nav-auth），这里只负责表单与高亮同步
   function showTab(t) {
     document.getElementById('login-form').classList.toggle('hidden', t !== 'login');
     document.getElementById('register-form').classList.toggle('hidden', t !== 'register');
-    document.getElementById('tab-login').classList.toggle('active', t === 'login');
-    document.getElementById('tab-register').classList.toggle('active', t === 'register');
+    var tl = document.getElementById('nav-tab-login');
+    var tr = document.getElementById('nav-tab-register');
+    if (tl) tl.classList.toggle('is-active', t === 'login');
+    if (tr) tr.classList.toggle('is-active', t === 'register');
   }
   showTab('{{ active_tab }}');
 </script>

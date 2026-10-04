@@ -28,6 +28,20 @@
       </form>
     </div>
   </nav>
+  {% else %}
+  {# 未登录：同一个顶栏，右侧换成小号的「登录 / 注册」文字入口。
+     主流站点的做法——卡片里只留表单本身，切换入口收进导航。
+     顺带让登录页也有了主题切换按钮（此前登录页没有顶栏，等于没有开关）。 #}
+  <nav class="navbar">
+    <a class="brand" href="{{ url_for('login_page') }}">💭 情感泡泡</a>
+    <div class="nav-links nav-auth">
+      <button type="button" class="nav-tab is-active" id="nav-tab-login"
+              onclick="showTab('login')">登录</button>
+      <button type="button" class="nav-tab" id="nav-tab-register"
+              onclick="showTab('register')">注册</button>
+      <button type="button" class="btn-ghost" id="theme-toggle" aria-label="切换深浅色"></button>
+    </div>
+  </nav>
   {% endif %}
 
   {% with messages = get_flashed_messages(with_categories=true) %}

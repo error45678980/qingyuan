@@ -116,8 +116,7 @@
   /* 装饰泡泡：更锐的顶侧高光，配亮边环才"成球" */
   --grad-ornament: radial-gradient(circle at 34% 26%,
       rgba(255, 255, 255, .96), rgba(255, 255, 255, .22) 34%, rgba(255, 255, 255, .05) 58%);
-  /* 白色薄雾：把锥形渐变压成柔和虹彩，免得看着像沙滩球 */
-  --grad-veil: linear-gradient(rgba(255, 255, 255, .45), rgba(255, 255, 255, .45));
+  /* 装饰泡泡另见 .orn 的多块虹彩斑实现 */
 
   /* —— 泡泡材质（深色下配方反转："亮边 + 暗腔"——亮边环更亮、内阴影换纯黑造体积）—— */
   --soap-gloss: light-dark(rgba(255, 255, 255, .78), rgba(255, 255, 255, .42));
@@ -195,6 +194,20 @@ a { text-decoration: none; color: var(--color-brand); }
 .nav-links { display: flex; align-items: center; gap: var(--space-4); }
 .nav-links a { font-weight: 600; }
 .nav-user { color: var(--color-text-secondary); font-size: var(--font-base); }
+
+/* 未登录顶栏的「登录 / 注册」：小号文字入口 + 下划线指示，
+   主流站点的做法。卡片里因此只剩表单本身，视线更集中。 */
+.nav-auth { gap: var(--space-5); }
+.nav-tab {
+  border: none; background: none; cursor: pointer; font-family: inherit;
+  font-size: var(--font-base); font-weight: 600; line-height: 1.2;
+  color: var(--color-text-secondary);
+  padding: var(--space-1) 0;
+  border-bottom: 2px solid transparent;
+  transition: color .18s ease, border-color .18s ease;
+}
+.nav-tab:hover { color: var(--color-brand); }
+.nav-tab.is-active { color: var(--color-brand); border-bottom-color: var(--color-brand); }
 .navbar form { margin: 0; }
 
 /* ===== 按钮 ===== */
@@ -278,13 +291,21 @@ a { text-decoration: none; color: var(--color-brand); }
   border-radius: var(--radius-full);
   pointer-events: none;
   z-index: 0;
+  /* 与泡泡墙同一套材质语言：多块错位虹彩斑（不是单一色轮）+ 折射，
+     不再压那层把虹彩洗白的白雾。 */
   background-image:
     var(--grad-ornament),
-    var(--grad-veil),
+    radial-gradient(ellipse 58% 42% at 30% 28%, var(--iris-1), transparent 70%),
+    radial-gradient(ellipse 48% 56% at 72% 64%, var(--iris-2), transparent 72%),
+    radial-gradient(ellipse 62% 44% at 44% 80%, var(--iris-3), transparent 72%),
+    radial-gradient(ellipse 42% 52% at 66% 24%, var(--iris-4), transparent 70%),
     conic-gradient(from 40deg, var(--iris-1), var(--iris-2), var(--iris-3), var(--iris-4), var(--iris-1));
-  filter: saturate(1.5);
-  opacity: .68;
+  filter: saturate(1.55);
+  /* 装饰是背景，不能跟卡片争视线——参考图的美学是"一个主角 + 安静背景" */
+  opacity: .5;
   box-shadow: var(--shadow-ornament);
+  -webkit-backdrop-filter: blur(2px) saturate(1.35);
+  backdrop-filter: blur(2px) saturate(1.35);
   animation: orn-float 9s ease-in-out infinite;
 }
 .orn-1 { width: 230px; height: 230px; top: 10%; left: 8%; }
@@ -309,12 +330,7 @@ a { text-decoration: none; color: var(--color-brand); }
 /* 展示级标题：大号字 + 负字距拉开层级（参考 unseen.co 的排版手法），不靠更粗的字重 */
 .auth-logo { color: var(--color-brand); font-size: var(--font-4xl); font-weight: 700; letter-spacing: -.02em; }
 .auth-sub { color: var(--color-text-muted); margin: var(--space-2) 0 var(--space-5); }
-.tabs { display: flex; gap: var(--space-2); margin-bottom: var(--space-5); }
-.tab {
-  flex: 1; padding: var(--space-3); border: 1px solid var(--color-brand-border); border-radius: var(--radius-lg);
-  background: transparent; color: var(--color-text-secondary); font-size: var(--font-base); font-weight: 600; cursor: pointer;
-}
-.tab.active { background: linear-gradient(90deg, var(--color-brand-btn-from), var(--color-brand-btn-to)); color: var(--color-text-inverse); border-color: transparent; }
+/* 「登录 / 注册」已上移到顶栏，见 .nav-auth / .nav-tab */
 .auth-card form { display: flex; flex-direction: column; gap: var(--space-3); }
 
 /* ===== 情感标签选择 ===== */
