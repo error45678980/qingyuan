@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>泡泡样板 · 情感泡泡</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<style>
+  .preview-stage {
+    min-height: 100vh; display: flex; flex-wrap: wrap;
+    align-items: center; justify-content: center; gap: 70px; padding: 70px 40px 90px;
+  }
+  .preview-hint {
+    position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+    color: #8a7bb8; background: rgba(255,255,255,.65); padding: 8px 18px;
+    border-radius: 20px; font-size: 14px; z-index: 10; box-shadow: 0 2px 12px rgba(150,120,220,.15);
+  }
+</style>
+</head>
+<body>
+  <div class="preview-hint">把鼠标移上去看「悬停」，点一下看「按下 + 选中」</div>
+  <div class="preview-stage">
+    <div class="soap" style="--size:190px; --c1:#ffd6f5; --c2:#ffb3d1; --c3:#ffe29a; --c4:#b8f0e6; --glow:rgba(255,150,200,.55); --dur:9s; --delay:0s;">
+      <span class="soap-film"></span>
+      <span class="soap-highlight"></span>
+      <span class="soap-ring ring-1"></span>
+      <span class="soap-ring ring-2"></span>
+      <span class="soap-shadow"></span>
+      <span class="soap-text"><span class="soap-emoji">🥺</span><span class="soap-content">最近有点孤独</span></span>
+    </div>
+
+    <div class="soap" style="--size:150px; --c1:#a8c8ff; --c2:#8fb0ff; --c3:#e6e6ff; --c4:#c9e8ff; --glow:rgba(120,160,255,.5); --dur:7s; --delay:1.2s;">
+      <span class="soap-film"></span>
+      <span class="soap-highlight"></span>
+      <span class="soap-ring ring-1"></span>
+      <span class="soap-ring ring-2"></span>
+      <span class="soap-shadow"></span>
+      <span class="soap-text"><span class="soap-emoji">😢</span><span class="soap-content">好想找人说说话</span></span>
+    </div>
+
+    <div class="soap" style="--size:120px; --c1:#ffe29a; --c2:#ffd0a8; --c3:#fff3c9; --c4:#ffc4d6; --glow:rgba(255,180,120,.5); --dur:6s; --delay:2.4s;">
+      <span class="soap-film"></span>
+      <span class="soap-highlight"></span>
+      <span class="soap-ring ring-1"></span>
+      <span class="soap-ring ring-2"></span>
+      <span class="soap-shadow"></span>
+      <span class="soap-text"><span class="soap-emoji">😊</span><span class="soap-content">今天超开心！</span></span>
+    </div>
+  </div>
+
+  <script>
+    document.querySelectorAll('.soap').forEach(function (b) {
+      b.addEventListener('click', function () {
+        document.querySelectorAll('.soap.selected').forEach(function (x) { x.classList.remove('selected'); });
+        b.classList.toggle('selected');
+      });
+    });
+  </script>
+</body>
+</html>

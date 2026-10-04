@@ -1,0 +1,15 @@
+<div class="panel-head">
+  <span class="panel-title">💬 {{ other }}</span>
+  <button class="panel-close" type="button" onclick="closeSidebar()">✕</button>
+</div>
+{% if bubble %}
+<div class="panel-ctx">{{ emotion_icons[bubble['emotion_tag']] }} 关于：{{ bubble['content'][:26] }}{{ '…' if bubble['content']|length > 26 }}</div>
+{% endif %}
+<div class="panel-msgs" id="panel-msgs">
+  {% include '_messages.html' %}
+</div>
+<form class="panel-input" action="{{ url_for('send_message', conversation_id=conversation['id']) }}" data-conversation-id="{{ conversation['id'] }}">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+  <input class="input" name="content" placeholder="说点什么..." autocomplete="off" required>
+  <button type="submit" class="btn-primary">发送</button>
+</form>

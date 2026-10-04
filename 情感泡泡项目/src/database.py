@@ -271,7 +271,8 @@ class Database:
             SELECT c.*, b.content AS bubble_content, b.emotion_tag AS bubble_emotion
             FROM conversations c
             JOIN bubbles b ON b.id = c.bubble_id
-            WHERE c.author_nickname = ? OR c.helper_nickname = ?
+            WHERE (c.author_nickname = ? OR c.helper_nickname = ?)
+              AND EXISTS (SELECT 1 FROM chat_messages m WHERE m.conversation_id = c.id)
             ORDER BY c.created_at DESC
         """, (nickname, nickname))
         return self.cursor.fetchall()

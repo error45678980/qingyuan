@@ -1,17 +1,18 @@
 {% for bubble in bubbles %}
-<div class="bubble-card" style="--accent: {{ emotion_colors[bubble['emotion_tag']][1] }}">
-  <a class="bubble-link" href="{{ url_for('bubble_detail', bubble_id=bubble['id']) }}">
-    <div class="bubble-top">
-      <span class="bubble-emoji">{{ emotion_icons[bubble['emotion_tag']] }}</span>
-      <span class="bubble-author">{{ bubble['author_nickname'] }}</span>
-    </div>
-    <p class="bubble-content">{{ bubble['content'] }}</p>
-    <div class="bubble-bottom">
-      <span class="mode-tag">{{ '📝 单次回复' if bubble['reply_mode'] == 'single' else '💬 对话框' }}</span>
-      <span>{{ bubble['created_at'][5:16].replace('T', ' ') }}</span>
-    </div>
-  </a>
-</div>
+  {% set v = bubble_style(bubble) %}
+  <div class="soap" data-bubble-id="{{ bubble['id'] }}"
+       style="--size:{{ v.size }}px; --x:{{ v.x }}px; --drop:{{ v.drop }}px; --fall:{{ v.fall }}s; --c1:{{ v.c1 }}; --c2:{{ v.c2 }}; --c3:{{ v.c3 }}; --c4:{{ v.c4 }}; --glow:{{ v.glow }}; --dur:{{ v.dur }}s; --delay:{{ v.delay }}s;">
+    <span class="soap-film"></span>
+    <span class="soap-highlight"></span>
+    <span class="soap-ring ring-1"></span>
+    <span class="soap-ring ring-2"></span>
+    <span class="soap-shadow"></span>
+    <span class="soap-text">
+      <span class="soap-emoji">{{ emotion_icons[bubble['emotion_tag']] }}</span>
+      <span class="soap-content">{{ bubble['content'] }}</span>
+    </span>
+  </div>
 {% else %}
 <div class="empty">💫 还没有泡泡哦~<br>点击右下角的 ＋ 发布你的第一个心情吧！</div>
 {% endfor %}
+

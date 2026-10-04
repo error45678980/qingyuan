@@ -3,6 +3,7 @@ server_app.py - 情感泡泡 网页版服务器
 提供页面渲染 + 表单处理 + 局部刷新片段。
 安全原则：用户身份一律从 session 获取，绝不信任前端提交的 author/sender 等字段。
 """
+import hashlib
 import os
 import uuid
 
@@ -30,6 +31,49 @@ EMOTION_COLORS = {
     "找人倾诉": ("#FFB78C", "#FF6348", "#FFF0E8"),
 }
 ALL_EMOTIONS = ["开心", "难过", "孤独", "焦虑", "寻求建议", "找人倾诉"]
+
+# ==================== 泡泡样式（确定性随机）====================
+_DREAMY = {
+    "开心": ["#ffe29a", "#ffd0a8", "#fff3c9", "#ffc4d6", "#ffe8b8"],
+    "难过": ["#a8c8ff", "#8fb0ff", "#c9e8ff", "#e6e6ff", "#9ec5ff"],
+    "孤独": ["#c9b8ff", "#b3a0ff", "#e6dcff", "#d8c8ff", "#c5b3ff"],
+    "焦虑": ["#ffb3c7", "#ff9ec0", "#ffd6e0", "#ffc9da", "#f5b8d0"],
+    "寻求建议": ["#a8f0d8", "#8fe8c8", "#c9f5e6", "#b8f0e6", "#9ee8d0"],
+    "找人倾诉": ["#ffd0a8", "#ffb88c", "#ffe0c8", "#ffc9a8", "#f5c0a0"],
+}
+_DREAMY_GLOW = {
+    "开心": "rgba(255,190,110,.5)",
+    "难过": "rgba(120,160,255,.5)",
+    "孤独": "rgba(175,140,255,.5)",
+    "焦虑": "rgba(255,150,180,.5)",
+    "寻求建议": "rgba(120,230,180,.5)",
+    "找人倾诉": "rgba(255,170,120,.5)",
+}
+
+
+def _bubble_variant(bubble):
+    """按泡泡 id 做确定性哈希，生成稳定的随机样式（刷新不闪烁）。"""
+    key = (bubble["id"] + bubble["emotion_tag"]).encode("utf-8")
+    seed = int(hashlib.md5(key).hexdigest(), 16)
+    emotion = bubble["emotion_tag"] if bubble["emotion_tag"] in _DREAMY else "开心"
+    palette = _DREAMY[emotion]
+    n = len(palette)
+    c1 = palette[seed % n]
+    c2 = palette[(seed >> 4) % n]
+    c3 = palette[(seed >> 8) % n]
+    c4 = palette[(seed >> 12) % n]
+    content_len = len(bubble["content"])
+    size = max(112, min(190, 116 + min(content_len, 24) * 3 + (seed % 14)))
+    return {
+        "size": size,
+        "c1": c1, "c2": c2, "c3": c3, "c4": c4,
+        "glow": _DREAMY_GLOW.get(emotion, "rgba(190,170,255,.5)"),
+        "dur": 6 + (seed % 5),
+        "delay": (seed % 40) / 10.0,
+        "x": (seed % 340) - 170,
+        "drop": 12 + (seed % 9),
+        "fall": 8 + (seed % 7),
+    }
 
 
 def _get_server_db_path():
@@ -61,11 +105,14 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = _load_secret("SECRET_KEY", "dev-secret-change-me")
 app.config["INVITE_CODE"] = _load_secret("INVITE_CODE", "")
 app.config["DB_PATH"] = _get_server_db_path()
+app.config["DATABASE_URL"] = _load_secret("DATABASE_URL", "")
 # 跑在 Cloudflare Tunnel 等反向代理后面：让 Flask 正确识别 https 与真实客户端 IP。
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
-init_database(app.config["DB_PATH"])
+init_database(app.config["DB_PATH"], app.config.get("DATABASE_URL", ""))
 app.teardown_appcontext(close_db)
+
+app.jinja_env.globals["bubble_style"] = _bubble_variant
 
 
 @app.context_processor
@@ -87,6 +134,12 @@ def forbidden(e):
 @app.errorhandler(404)
 def not_found(e):
     return render_template("404.html"), 404
+
+
+# ==================== 泡泡样板（预览）====================
+@app.route("/preview")
+def preview():
+    return render_template("preview.html")
 
 
 # ==================== 认证 ====================
@@ -186,55 +239,6 @@ def partial_bubbles():
     return render_template("_bubbles.html", bubbles=bubbles)
 
 
-@app.route("/publish")
-@login_required
-def publish_page():
-    return render_template("publish.html")
-
-
-@app.route("/bubble/<bubble_id>")
-@login_required
-def bubble_detail(bubble_id):
-    db = get_db()
-    bubble = db.get_bubble(bubble_id)
-    if not bubble:
-        return render_template("404.html"), 404
-    user = get_current_user()
-    is_author = (bubble["author_id"] == user["id"])
-    replies = db.get_replies(bubble_id)
-    conversation = None
-    conversations = []
-    if bubble["reply_mode"] == "dialog":
-        if is_author:
-            conversations = db.list_conversations_for_bubble(bubble_id)
-        else:
-            conversation = db.get_conversation_by_participants(bubble_id, user["username"])
-    has_replied = db.has_replied(bubble_id, user["username"])
-    return render_template("bubble_detail.html", bubble=bubble, is_author=is_author,
-                           replies=replies, conversation=conversation,
-                           conversations=conversations, has_replied=has_replied)
-
-
-@app.route("/chat/<conversation_id>")
-@login_required
-def chat_page(conversation_id):
-    db = get_db()
-    conversation = db.get_conversation(conversation_id)
-    if not conversation:
-        return render_template("404.html"), 404
-    user = get_current_user()
-    if conversation["author_nickname"] != user["username"] and conversation["helper_nickname"] != user["username"]:
-        return render_template("403.html"), 403
-    bubble = db.get_bubble(conversation["bubble_id"])
-    messages = db.get_messages_for_conversation(conversation_id)
-    if conversation["helper_nickname"] == user["username"]:
-        other = conversation["author_nickname"]
-    else:
-        other = conversation["helper_nickname"]
-    return render_template("chat.html", conversation=conversation, bubble=bubble,
-                           messages=messages, other=other)
-
-
 @app.route("/partial/chat/<conversation_id>")
 @login_required
 def partial_chat(conversation_id):
@@ -249,98 +253,24 @@ def partial_chat(conversation_id):
     return render_template("_messages.html", messages=messages, current_user=user)
 
 
-@app.route("/chats")
-@login_required
-def chats_page():
-    db = get_db()
-    user = get_current_user()
-    conversations = db.list_conversations_for_user(user["username"])
-    return render_template("chats.html", conversations=conversations)
-
-
 # ==================== 表单处理 ====================
 @app.route("/publish", methods=["POST"])
 @login_required
 def publish():
     if not validate_csrf():
-        flash("请求无效，请重试", "error")
-        return redirect(url_for("publish_page"))
+        return jsonify({"error": "invalid csrf"}), 400
     content = (request.form.get("content") or "").strip()
     emotion_tag = request.form.get("emotion_tag") or ""
-    reply_mode = request.form.get("reply_mode") or "single"
-
     if not content:
-        flash("写点什么再发布吧", "error")
-        return redirect(url_for("publish_page"))
+        return jsonify({"error": "empty"}), 400
     if emotion_tag not in ALL_EMOTIONS:
-        flash("请选择一个情感标签", "error")
-        return redirect(url_for("publish_page"))
-    if reply_mode not in ("single", "dialog"):
-        reply_mode = "single"
-
+        return jsonify({"error": "invalid emotion"}), 400
     user = get_current_user()
     db = get_db()
     bubble_id = str(uuid.uuid4())
-    db.save_bubble(bubble_id, user["username"], content, emotion_tag, reply_mode,
+    db.save_bubble(bubble_id, user["username"], content, emotion_tag, "dialog",
                    author_id=user["id"])
-    flash("泡泡发布成功 🌟", "success")
-    return redirect(url_for("bubble_detail", bubble_id=bubble_id))
-
-
-@app.route("/bubble/<bubble_id>/reply", methods=["POST"])
-@login_required
-def post_reply(bubble_id):
-    db = get_db()
-    bubble = db.get_bubble(bubble_id)
-    if not bubble:
-        return render_template("404.html"), 404
-    if not validate_csrf():
-        flash("请求无效，请重试", "error")
-        return redirect(url_for("bubble_detail", bubble_id=bubble_id))
-    user = get_current_user()
-    if bubble["author_id"] == user["id"]:
-        flash("不能回复自己的泡泡哦", "error")
-        return redirect(url_for("bubble_detail", bubble_id=bubble_id))
-    if bubble["reply_mode"] != "single":
-        return redirect(url_for("bubble_detail", bubble_id=bubble_id))
-    if db.has_replied(bubble_id, user["username"]):
-        flash("这个泡泡只能回复一次哦～", "error")
-        return redirect(url_for("bubble_detail", bubble_id=bubble_id))
-    content = (request.form.get("content") or "").strip()
-    if not content:
-        flash("回复不能为空", "error")
-        return redirect(url_for("bubble_detail", bubble_id=bubble_id))
-    db.save_reply(bubble_id, user["username"], content)
-    flash("回复成功，谢谢你的关心 💕", "success")
-    return redirect(url_for("bubble_detail", bubble_id=bubble_id))
-
-
-@app.route("/bubble/<bubble_id>/chat", methods=["POST"])
-@login_required
-def start_chat(bubble_id):
-    db = get_db()
-    bubble = db.get_bubble(bubble_id)
-    if not bubble:
-        return render_template("404.html"), 404
-    if not validate_csrf():
-        flash("请求无效，请重试", "error")
-        return redirect(url_for("bubble_detail", bubble_id=bubble_id))
-    user = get_current_user()
-    if bubble["author_id"] == user["id"]:
-        flash("不能和自己聊天哦", "error")
-        return redirect(url_for("bubble_detail", bubble_id=bubble_id))
-    if bubble["reply_mode"] != "dialog":
-        flash("这个泡泡没有开启对话通道", "error")
-        return redirect(url_for("bubble_detail", bubble_id=bubble_id))
-    content = (request.form.get("content") or "").strip()
-    if not content:
-        flash("说点什么吧", "error")
-        return redirect(url_for("bubble_detail", bubble_id=bubble_id))
-
-    conversation = db.get_or_create_conversation(bubble_id, bubble["author_nickname"], user["username"])
-    db.save_chat_message(bubble_id, user["username"], bubble["author_nickname"],
-                         content, conversation_id=conversation["id"])
-    return redirect(url_for("chat_page", conversation_id=conversation["id"]))
+    return jsonify({"ok": True, "bubble_id": bubble_id})
 
 
 @app.route("/chat/<conversation_id>/send", methods=["POST"])
@@ -349,23 +279,22 @@ def send_message(conversation_id):
     db = get_db()
     conversation = db.get_conversation(conversation_id)
     if not conversation:
-        return render_template("404.html"), 404
+        return jsonify({"error": "not found"}), 404
     if not validate_csrf():
-        flash("请求无效，请重试", "error")
-        return redirect(url_for("chat_page", conversation_id=conversation_id))
+        return jsonify({"error": "invalid csrf"}), 400
     user = get_current_user()
     if conversation["author_nickname"] != user["username"] and conversation["helper_nickname"] != user["username"]:
-        return render_template("403.html"), 403
+        return jsonify({"error": "forbidden"}), 403
     content = (request.form.get("content") or "").strip()
     if not content:
-        return redirect(url_for("chat_page", conversation_id=conversation_id))
+        return jsonify({"error": "empty"}), 400
     if user["username"] == conversation["helper_nickname"]:
         receiver = conversation["author_nickname"]
     else:
         receiver = conversation["helper_nickname"]
     db.save_chat_message(conversation["bubble_id"], user["username"], receiver,
                          content, conversation_id=conversation_id)
-    return redirect(url_for("chat_page", conversation_id=conversation_id))
+    return jsonify({"ok": True})
 
 
 @app.route("/bubble/<bubble_id>/resolve", methods=["POST"])
@@ -374,16 +303,14 @@ def resolve(bubble_id):
     db = get_db()
     bubble = db.get_bubble(bubble_id)
     if not bubble:
-        return render_template("404.html"), 404
+        return jsonify({"error": "not found"}), 404
     if not validate_csrf():
-        flash("请求无效，请重试", "error")
-        return redirect(url_for("bubble_detail", bubble_id=bubble_id))
+        return jsonify({"error": "invalid csrf"}), 400
     user = get_current_user()
     if bubble["author_id"] != user["id"]:
-        return render_template("403.html"), 403
+        return jsonify({"error": "forbidden"}), 403
     db.resolve_bubble(bubble_id)
-    flash("泡泡已经炸掉消失啦 💥", "success")
-    return redirect(url_for("index"))
+    return jsonify({"ok": True})
 
 
 @app.route("/bubble/<bubble_id>/save", methods=["POST"])
@@ -392,17 +319,66 @@ def save(bubble_id):
     db = get_db()
     bubble = db.get_bubble(bubble_id)
     if not bubble:
-        return render_template("404.html"), 404
+        return jsonify({"error": "not found"}), 404
     if not validate_csrf():
-        flash("请求无效，请重试", "error")
-        return redirect(url_for("bubble_detail", bubble_id=bubble_id))
+        return jsonify({"error": "invalid csrf"}), 400
     user = get_current_user()
     if bubble["author_id"] != user["id"]:
-        return render_template("403.html"), 403
+        return jsonify({"error": "forbidden"}), 403
     is_public = request.form.get("is_public") == "true"
     db.save_bubble_as(bubble_id, is_public)
-    flash("已保存 💾", "success")
-    return redirect(url_for("bubble_detail", bubble_id=bubble_id))
+    return jsonify({"ok": True})
+
+
+# ==================== 侧栏面板 ====================
+@app.route("/partial/panel/bubble/<bubble_id>")
+@login_required
+def panel_bubble(bubble_id):
+    db = get_db()
+    bubble = db.get_bubble(bubble_id)
+    if not bubble:
+        return render_template("404.html"), 404
+    user = get_current_user()
+    is_author = (bubble["author_id"] == user["id"])
+    conversation = None
+    conversations = []
+    if is_author:
+        conversations = db.list_conversations_for_bubble(bubble_id)
+    else:
+        conversation = db.get_or_create_conversation(bubble_id, bubble["author_nickname"], user["username"])
+    messages = db.get_messages_for_conversation(conversation["id"]) if conversation else []
+    other = None
+    if conversation:
+        other = conversation["author_nickname"] if conversation["helper_nickname"] == user["username"] else conversation["helper_nickname"]
+    return render_template("_sidebar_panel_bubble.html", bubble=bubble, is_author=is_author,
+                           conversation=conversation, conversations=conversations,
+                           messages=messages, other=other)
+
+
+@app.route("/partial/panel/conversation/<conversation_id>")
+@login_required
+def panel_conversation(conversation_id):
+    db = get_db()
+    conversation = db.get_conversation(conversation_id)
+    if not conversation:
+        return render_template("404.html"), 404
+    user = get_current_user()
+    if conversation["author_nickname"] != user["username"] and conversation["helper_nickname"] != user["username"]:
+        return render_template("403.html"), 403
+    bubble = db.get_bubble(conversation["bubble_id"])
+    messages = db.get_messages_for_conversation(conversation_id)
+    other = conversation["author_nickname"] if conversation["helper_nickname"] == user["username"] else conversation["helper_nickname"]
+    return render_template("_chat_panel.html", conversation=conversation, bubble=bubble,
+                           messages=messages, other=other)
+
+
+@app.route("/partial/panel/conversations")
+@login_required
+def panel_conversations():
+    db = get_db()
+    user = get_current_user()
+    conversations = db.list_conversations_for_user(user["username"])
+    return render_template("_sidebar_panel_conversations.html", conversations=conversations)
 
 
 if __name__ == "__main__":

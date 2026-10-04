@@ -8,23 +8,82 @@
   {% endfor %}
 </div>
 
-<div id="bubble-grid" class="grid">
+<div id="bubble-wall" class="bubble-wall">
   {% include '_bubbles.html' %}
 </div>
 
-<a class="fab" href="{{ url_for('publish_page') }}">＋</a>
+<button class="fab" type="button" onclick="openPublish()">＋</button>
+
+<div class="modal-overlay" id="publish-modal" onclick="if(event.target===this)closePublish()">
+  <div class="modal-card card">
+    <div class="panel-head">
+      <span class="panel-title">💭 发布心情</span>
+      <button class="panel-close" type="button" onclick="closePublish()">✕</button>
+    </div>
+    <form id="publish-form" action="{{ url_for('publish') }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+      <textarea class="input" name="content" rows="4" placeholder="写下你现在的心情...分享你的感受，会有人看见的 🌟" required></textarea>
+      <label class="publish-label">情感标签</label>
+      <div class="emotion-picker">
+        {% for e in all_emotions %}
+        <label class="emo-option" style="--accent: {{ emotion_colors[e][1] }}">
+          <input type="radio" name="emotion_tag" value="{{ e }}" {{ 'checked' if loop.first }}>
+          <span>{{ emotion_icons[e] }} {{ e }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <button class="btn-primary btn-block" type="submit">🌟 发布泡泡</button>
+    </form>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
   const partialUrl = "{{ url_for('partial_bubbles', emotion=current_emotion) if current_emotion else url_for('partial_bubbles') }}";
+  const wall = document.getElementById('bubble-wall');
+  let lastHtml = wall.innerHTML.trim();
+
   setInterval(async function () {
     try {
       const res = await fetch(partialUrl);
-      if (res.ok) {
-        document.getElementById('bubble-grid').innerHTML = await res.text();
+      if (!res.ok) return;
+      const html = (await res.text()).trim();
+      if (html === lastHtml) return;  // 没变化就跳过，避免闪烁/重播动画
+
+      const prevFirstId = wall.querySelector('.soap') ? wall.querySelector('.soap').dataset.bubbleId : null;
+      const tmp = document.createElement('div');
+      tmp.innerHTML = html;
+      const newFirstId = tmp.querySelector('.soap') ? tmp.querySelector('.soap').dataset.bubbleId : null;
+
+      wall.innerHTML = html;
+      lastHtml = html;
+
+      // 最顶的泡泡换了 → 说明有新泡泡，让它"冒出来"
+      if (newFirstId && newFirstId !== prevFirstId) {
+        const el = wall.querySelector('.soap');
+        if (el) {
+          el.classList.add('fresh');
+          setTimeout(function () { el.classList.remove('fresh'); }, 800);
+        }
       }
     } catch (e) {}
   }, 3000);
+
+  // 发布弹窗
+  function openPublish() {
+    document.getElementById('publish-modal').classList.add('open');
+  }
+  function closePublish() {
+    document.getElementById('publish-modal').classList.remove('open');
+  }
+  document.getElementById('publish-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const res = await fetch(this.action, { method: 'POST', body: new FormData(this) });
+    if (res.ok) {
+      closePublish();
+      this.reset();
+    }
+  });
 </script>
 {% endblock %}

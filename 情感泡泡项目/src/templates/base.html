@@ -12,7 +12,7 @@
     <a class="brand" href="{{ url_for('index') }}">💭 情感泡泡</a>
     <div class="nav-links">
       <a href="{{ url_for('index') }}">泡泡墙</a>
-      <a href="{{ url_for('chats_page') }}">我的对话</a>
+      <a href="#" data-open-panel="{{ url_for('panel_conversations') }}">我的对话</a>
       <span class="nav-user">👤 {{ current_user['username'] }}</span>
       <form method="post" action="{{ url_for('logout') }}">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
@@ -37,5 +37,98 @@
   </main>
 
   {% block scripts %}{% endblock %}
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-body" id="sidebar-body"></div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <script>
+  (function () {
+    var sidebar = document.getElementById('sidebar');
+    var overlay = document.getElementById('sidebar-overlay');
+    var body = document.getElementById('sidebar-body');
+
+    window.openSidebar = function (url) {
+      fetch(url).then(function (r) { return r.text(); }).then(function (html) {
+        body.innerHTML = html;
+        sidebar.classList.add('open');
+        overlay.classList.add('open');
+        var msgs = document.getElementById('panel-msgs');
+        if (msgs) msgs.scrollTop = msgs.scrollHeight;
+      });
+    };
+    window.closeSidebar = function () {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('open');
+    };
+    overlay.addEventListener('click', closeSidebar);
+
+    // 点泡泡 / 点带 data-open-panel 的元素 → 打开侧栏
+    document.addEventListener('click', function (e) {
+      var opener = e.target.closest('[data-open-panel]');
+      if (opener) {
+        e.preventDefault();
+        openSidebar(opener.getAttribute('data-open-panel'));
+        return;
+      }
+      var soap = e.target.closest('.soap');
+      if (soap && soap.getAttribute('data-bubble-id')) {
+        openSidebar('/partial/panel/bubble/' + soap.getAttribute('data-bubble-id'));
+      }
+    });
+
+    // 表单提交：聊天 / 作者操作
+    document.addEventListener('submit', function (e) {
+      var form = e.target;
+      if (form.classList.contains('panel-input')) {
+        e.preventDefault();
+        sendPanelMessage(form);
+      } else if (form.classList.contains('panel-action-form')) {
+        e.preventDefault();
+        panelAction(form);
+      }
+    });
+
+    function sendPanelMessage(form) {
+      fetch(form.action, { method: 'POST', body: new FormData(form) }).then(function (res) {
+        if (res.ok) {
+          var input = form.querySelector('input[name=content]');
+          if (input) input.value = '';
+          refreshMessages(form.getAttribute('data-conversation-id'));
+        }
+      });
+    }
+
+    function panelAction(form) {
+      fetch(form.getAttribute('data-action'), { method: 'POST', body: new FormData(form) }).then(function (res) {
+        if (res.ok) closeSidebar();
+      });
+    }
+
+    function refreshMessages(convId) {
+      var msgs = document.getElementById('panel-msgs');
+      if (!msgs) return;
+      fetch('/partial/chat/' + convId).then(function (r) { return r.text(); }).then(function (html) {
+        msgs.innerHTML = html;
+        msgs.scrollTop = msgs.scrollHeight;
+      });
+    }
+
+    // 聊天轮询（2 秒）
+    setInterval(function () {
+      var form = document.querySelector('#sidebar .panel-input[data-conversation-id]');
+      if (!form) return;
+      var convId = form.getAttribute('data-conversation-id');
+      var msgs = document.getElementById('panel-msgs');
+      if (!msgs) return;
+      var atBottom = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 40;
+      fetch('/partial/chat/' + convId).then(function (r) { return r.text(); }).then(function (html) {
+        msgs.innerHTML = html;
+        if (atBottom) msgs.scrollTop = msgs.scrollHeight;
+      }).catch(function () {});
+    }, 2000);
+  })();
+  </script>
 </body>
 </html>
