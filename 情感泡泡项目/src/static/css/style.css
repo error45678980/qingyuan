@@ -103,6 +103,24 @@
       rgba(255, 255, 255, .96), rgba(255, 255, 255, .22) 34%, rgba(255, 255, 255, .05) 58%);
   /* 白色薄雾：把锥形渐变压成柔和虹彩，免得看着像沙滩球 */
   --grad-veil: linear-gradient(rgba(255, 255, 255, .45), rgba(255, 255, 255, .45));
+
+  /* —— 泡泡材质（.soap 的"玻璃配方"，集中在此便于统一调）—— */
+  --soap-gloss: rgba(255, 255, 255, .78);         /* 顶侧亮面 */
+  --soap-veil: rgba(255, 255, 255, .15);          /* 中间薄膜 */
+  --soap-faint: rgba(255, 255, 255, .04);         /* 边缘残留 */
+  --soap-halo: rgba(255, 255, 255, .6);           /* 外发光 / 涟漪环 */
+  --soap-halo-hover: rgba(255, 255, 255, .9);
+  --soap-halo-active: rgba(255, 255, 255, 1);
+  --soap-rim: rgba(255, 255, 255, .5);            /* 亮边环 + 悬停内光 */
+  --soap-inner-top: rgba(255, 255, 255, .4);      /* 顶部内发光 */
+  --soap-inner-active: rgba(255, 255, 255, .55);
+  --soap-inner-bottom: rgba(110, 75, 175, .16);   /* 底部内阴影 = 体积 */
+  --soap-ground: rgba(110, 80, 190, .3);          /* 落地投影 */
+  --soap-emoji-glow: rgba(255, 255, 255, .7);
+  --soap-glow-default: rgba(190, 170, 255, .5);   /* --glow 的兜底色 */
+  --soap-text-shadow: rgba(64, 40, 105, .55);     /* 白字的深色投影 */
+  --soap-text-shadow-soft: rgba(64, 40, 105, .38);
+  --soap-text-inset: 16%;                         /* 文字距泡泡边缘的比例 */
 }
 
 body {
@@ -276,15 +294,15 @@ a { text-decoration: none; color: var(--color-brand); }
   -webkit-tap-highlight-color: transparent;
   /* 三层底：收紧的有色内核（让白字可读）+ 大面积通透的膜 + 顶侧高光 */
   background:
-    radial-gradient(circle at 50% 58%, var(--glow, rgba(190,170,255,.5)), rgba(255,255,255,0) 54%),
-    radial-gradient(circle at 30% 24%, rgba(255,255,255,.78), rgba(255,255,255,.15) 42%, rgba(255,255,255,.04) 72%);
+    radial-gradient(circle at 50% 58%, var(--glow, var(--soap-glow-default)), transparent 54%),
+    radial-gradient(circle at 30% 24%, var(--soap-gloss), var(--soap-veil) 42%, var(--soap-faint) 72%);
   /* 外发光 + 亮边环 + 底部内阴影（体积感） */
   box-shadow:
-    0 0 18px rgba(255,255,255,.6),
-    0 0 46px var(--glow, rgba(190,170,255,.5)),
-    inset 0 0 0 1.5px rgba(255,255,255,.5),
-    inset 0 -16px 34px rgba(110,75,175,.16),
-    inset 0 12px 26px rgba(255,255,255,.4);
+    0 0 18px var(--soap-halo),
+    0 0 46px var(--glow, var(--soap-glow-default)),
+    inset 0 0 0 1.5px var(--soap-rim),
+    inset 0 -16px 34px var(--soap-inner-bottom),
+    inset 0 12px 26px var(--soap-inner-top);
   scale: 1;
   translate: 0 0;
   margin-left: var(--x, 0px);
@@ -296,17 +314,17 @@ a { text-decoration: none; color: var(--color-brand); }
 .soap:hover {
   scale: 1.06;
   box-shadow:
-    0 0 28px rgba(255,255,255,.9),
-    0 0 70px var(--glow, rgba(190,170,255,.7)),
-    inset 0 0 26px rgba(255,255,255,.5);
+    0 0 28px var(--soap-halo-hover),
+    0 0 70px var(--glow, var(--soap-glow-default)),
+    inset 0 0 26px var(--soap-rim);
 }
 .soap:active { scale: .94; }
 .soap.selected {
   scale: 1.08;
   box-shadow:
-    0 0 30px rgba(255,255,255,1),
-    0 0 80px var(--glow, rgba(190,170,255,.85)),
-    inset 0 0 28px rgba(255,255,255,.55);
+    0 0 30px var(--soap-halo-active),
+    0 0 80px var(--glow, var(--soap-glow-default)),
+    inset 0 0 28px var(--soap-inner-active);
 }
 .soap.fresh {
   animation:
@@ -336,7 +354,7 @@ a { text-decoration: none; color: var(--color-brand); }
 .soap-highlight {
   position: absolute; inset: 5%;
   border-radius: var(--radius-full);
-  background: radial-gradient(circle at 30% 22%, rgba(255,255,255,.9), rgba(255,255,255,0) 48%);
+  background: radial-gradient(circle at 30% 22%, var(--soap-halo-hover), transparent 48%);
   pointer-events: none;
 }
 
@@ -344,7 +362,7 @@ a { text-decoration: none; color: var(--color-brand); }
 .soap-ring {
   position: absolute; inset: -3px;
   border-radius: var(--radius-full);
-  border: 2px solid rgba(255,255,255,.6);
+  border: 2px solid var(--soap-halo);
   pointer-events: none;
   animation: soap-ripple 4s ease-out infinite;
 }
@@ -354,7 +372,7 @@ a { text-decoration: none; color: var(--color-brand); }
 .soap-shadow {
   position: absolute; left: 16%; right: 16%; bottom: -18px; height: 22px;
   border-radius: var(--radius-full);
-  background: radial-gradient(ellipse at center, rgba(110,80,190,.3), rgba(110,80,190,0) 70%);
+  background: radial-gradient(ellipse at center, var(--soap-ground), transparent 70%);
   filter: blur(7px);
   pointer-events: none;
 }
@@ -363,15 +381,15 @@ a { text-decoration: none; color: var(--color-brand); }
 .soap-text {
   position: relative; z-index: 3;
   display: flex; flex-direction: column; align-items: center; gap: var(--space-1);
-  text-align: center; padding: 0 16%;
+  text-align: center; padding: 0 var(--soap-text-inset);
   pointer-events: none;
 }
-.soap-emoji { font-size: calc(var(--size, 170px) * .22); line-height: 1; filter: drop-shadow(0 0 6px rgba(255,255,255,.7)); }
+.soap-emoji { font-size: calc(var(--size, 170px) * .22); line-height: 1; filter: drop-shadow(0 0 6px var(--soap-emoji-glow)); }
 .soap-content {
   color: var(--color-white); font-weight: 700;
   font-size: calc(var(--size, 170px) * .12); line-height: 1.3;
   /* 深色投影把白字从浅色泡泡里"托"出来，而不是用白光糊成一片 */
-  text-shadow: 0 1px 2px rgba(64,40,105,.55), 0 2px 10px rgba(64,40,105,.38);
+  text-shadow: 0 1px 2px var(--soap-text-shadow), 0 2px 10px var(--soap-text-shadow-soft);
   overflow: hidden; word-break: break-word;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
@@ -462,7 +480,7 @@ a { text-decoration: none; color: var(--color-brand); }
 .msg-bubble { max-width: 72%; padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); }
 .msg.me .msg-bubble { background: linear-gradient(90deg, var(--color-brand-light), var(--color-brand)); color: var(--color-text-inverse); border-bottom-right-radius: var(--radius-xs); }
 .msg.other .msg-bubble { background: var(--color-brand-surface); color: var(--color-text-strong); border-bottom-left-radius: var(--radius-xs); }
-.msg-name { font-size: var(--font-xs); font-weight: 700; color: var(--color-brand); margin-bottom: 2px; }
+.msg-name { font-size: var(--font-xs); font-weight: 700; color: var(--color-brand); margin-bottom: var(--space-1); }
 .msg-content { word-break: break-word; white-space: pre-wrap; }
 .msg-time { font-size: var(--font-xs); opacity: .7; text-align: right; margin-top: var(--space-1); }
 

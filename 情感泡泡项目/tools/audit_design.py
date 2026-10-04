@@ -53,15 +53,28 @@ def _non_token(counter):
     return Counter({k: v for k, v in counter.items() if 'var(' not in k})
 
 
+def _spacing_decisions(counter):
+    """间距里只有 0 / auto 的属于通用写法，不算"设计决策"。"""
+    out = Counter()
+    for val, n in counter.items():
+        if 'var(' in val:
+            continue
+        if re.sub(r'\b(0|auto)\b', '', val).strip():
+            out[val] = n
+    return out
+
+
 def audit_tokens(text):
     consumer_text, root_block = _split_root(text)
     consumer = _scan(consumer_text)
     token_names = re.findall(r'(--[\w-]+)\s*:', root_block)
     referenced = set(re.findall(r'var\((--[\w-]+)', text))
     unused = sorted({n for n in token_names if n not in referenced})
+    hardcoded = {k: _non_token(consumer[k]) for k in _TOKEN_KEYS}
+    hardcoded["spacing"] = _spacing_decisions(consumer["spacing"])
     return dict(
         consumer=consumer,
-        hardcoded={k: _non_token(consumer[k]) for k in _TOKEN_KEYS},
+        hardcoded=hardcoded,
         token_count=len(token_names),
         var_refs=len(re.findall(r'var\(--[\w-]+', text)),
         unused_tokens=unused,
