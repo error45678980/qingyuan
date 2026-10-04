@@ -26,7 +26,7 @@
       <label class="publish-label">情感标签</label>
       <div class="emotion-picker">
         {% for e in all_emotions %}
-        <label class="emo-option" style="--accent: {{ emotion_colors[e][1] }}">
+        <label class="emo-option" style="--accent: {{ emotion_colors[e][1] }}; --accent-soft: {{ emotion_colors[e][2] }}">
           <input type="radio" name="emotion_tag" value="{{ e }}" {{ 'checked' if loop.first }}>
           <span>{{ emotion_icons[e] }} {{ e }}</span>
         </label>

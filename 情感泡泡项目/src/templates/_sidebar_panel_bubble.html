@@ -2,7 +2,10 @@
   <span class="panel-title">{{ emotion_icons[bubble['emotion_tag']] }} {{ bubble['author_nickname'] }}</span>
   <button class="panel-close" type="button" onclick="closeSidebar()">✕</button>
 </div>
-<div class="panel-ctx-full">{{ bubble['content'] }}</div>
+<div class="panel-ctx-full" style="--accent: {{ emotion_colors[bubble['emotion_tag']][1] }}">
+  <span class="panel-ctx-emoji">{{ emotion_icons[bubble['emotion_tag']] }}</span>
+  <span class="panel-ctx-text">{{ bubble['content'] }}</span>
+</div>
 
 {% if is_author %}
   <div class="panel-actions">

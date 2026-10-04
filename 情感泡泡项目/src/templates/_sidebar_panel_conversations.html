@@ -6,7 +6,7 @@
   {% set other = c['helper_nickname'] if c['author_nickname'] == current_user['username'] else c['author_nickname'] %}
   <div class="conv-row" data-open-panel="{{ url_for('panel_conversation', conversation_id=c['id']) }}">
     <span class="conv-emoji">{{ emotion_icons[c['bubble_emotion']] }}</span>
-    <span class="conv-other">👤 {{ other }}</span>
+    <span class="conv-other">{{ other }}</span>
     <span class="conv-go">→</span>
   </div>
 {% else %}
