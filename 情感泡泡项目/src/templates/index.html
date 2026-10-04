@@ -43,30 +43,30 @@
   const partialUrl = "{{ url_for('partial_bubbles', emotion=current_emotion) if current_emotion else url_for('partial_bubbles') }}";
   const wall = document.getElementById('bubble-wall');
   let lastHtml = wall.innerHTML.trim();
+  const fullSync = new URLSearchParams(location.search).get('polling') === 'full';
+
+  // hover/按压动效（事件委托，一次性绑定）
+  if (window.WallMotion) WallMotion.initWall(wall);
 
   setInterval(async function () {
     try {
       const res = await fetch(partialUrl);
       if (!res.ok) return;
       const html = (await res.text()).trim();
-      if (html === lastHtml) return;  // 没变化就跳过，避免闪烁/重播动画
-
-      const prevFirstId = wall.querySelector('.soap') ? wall.querySelector('.soap').dataset.bubbleId : null;
-      const tmp = document.createElement('div');
-      tmp.innerHTML = html;
-      const newFirstId = tmp.querySelector('.soap') ? tmp.querySelector('.soap').dataset.bubbleId : null;
-
-      wall.innerHTML = html;
+      if (html === lastHtml) return;  // 没变化就跳过
       lastHtml = html;
 
-      // 最顶的泡泡换了 → 说明有新泡泡，让它"冒出来"
-      if (newFirstId && newFirstId !== prevFirstId) {
-        const el = wall.querySelector('.soap');
-        if (el) {
-          el.classList.add('fresh');
-          setTimeout(function () { el.classList.remove('fresh'); }, 800);
-        }
+      if (fullSync || !window.WallSync) {
+        wall.innerHTML = html;        // 回退路径：?polling=full 或脚本未加载
+        return;
       }
+      // keyed diff：复用节点、只给真正的新泡泡播飘落入场，
+      // 消失的泡泡先杀动画再退场——不再只有"第一个泡泡"才有入场动画
+      WallSync.sync(wall, html, {
+        onEnter: function (node) { window.WallMotion && WallMotion.enter(node); },
+        onLeave: function (node) { window.WallMotion ? WallMotion.leave(node) : node.remove(); },
+        onRefresh: function () {}
+      });
     } catch (e) {}
   }, 3000);
 

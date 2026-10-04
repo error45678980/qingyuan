@@ -113,19 +113,38 @@ def region_stats(pixels, w, channels, x0, y0, x1, y1, text_lum):
 
 
 # ==================== 生成探针页 ====================
-def build_page() -> str:
-    from src.server_app import ALL_EMOTIONS, _DREAMY, _DREAMY_GLOW
+def _load_palettes():
+    """从 server_app 读情绪色板，兼容改造前后两套常量命名。
 
+    返回 {mode: (dreamy, glow, core)}；改造前只有 light，core 与 glow 相同。
+    """
+    import src.server_app as app
+    if hasattr(app, "_DREAMY_LIGHT"):
+        out = {"light": (app._DREAMY_LIGHT, app._DREAMY_GLOW_LIGHT, app._DREAMY_GLOW_LIGHT)}
+        if hasattr(app, "_DREAMY_DARK"):
+            core = getattr(app, "_DREAMY_CORE_DARK", app._DREAMY_GLOW_DARK)
+            out["dark"] = (app._DREAMY_DARK, app._DREAMY_GLOW_DARK, core)
+        return out
+    return {"light": (app._DREAMY, app._DREAMY_GLOW, app._DREAMY_GLOW)}
+
+
+def build_page(mode: str = "light", hide_glyphs: bool = False) -> str:
+    from src.server_app import ALL_EMOTIONS
+
+    dreamy, glow_map, core_map = _load_palettes()[mode]
+    # 深色模式：根元素挂 data-theme，让 light-dark() 取暗支
+    theme_attr = ' data-theme="dark"' if mode == "dark" else ""
+    glyph_rule = ('.soap-content,.soap-emoji{visibility:hidden}' if hide_glyphs else '')
     cells = []
     for idx, emo in enumerate(ALL_EMOTIONS):
-        pal = _DREAMY[emo]
+        pal = dreamy[emo]
         left = MARGIN + (idx % COLS) * (BUBBLE + GAP)
         top = MARGIN + (idx // COLS) * (BUBBLE + GAP)
         cells.append(
             f'<div class="soap" style="position:absolute;left:{left}px;top:{top}px;'
             f'--size:{BUBBLE}px;--x:0px;--y:0px;'
             f'--c1:{pal[0]};--c2:{pal[1]};--c3:{pal[2]};--c4:{pal[3]};'
-            f'--glow:{_DREAMY_GLOW[emo]};">'
+            f'--glow:{glow_map[emo]};--core:{core_map[emo]};">'
             '<span class="soap-film"></span><span class="soap-highlight"></span>'
             '<span class="soap-ring"></span><span class="soap-shadow"></span>'
             '<span class="soap-text"><span class="soap-emoji">🙂</span>'
@@ -134,27 +153,40 @@ def build_page() -> str:
     width = MARGIN * 2 + COLS * BUBBLE + (COLS - 1) * GAP
     height = MARGIN * 2 + 2 * BUBBLE + GAP
     return (
-        '<!DOCTYPE html><html><head><meta charset="utf-8">'
+        f'<!DOCTYPE html><html{theme_attr}><head><meta charset="utf-8">'
         f'<link rel="stylesheet" href="{(shoot.CSS_DIR / "style.css").as_uri()}">'
         '<style>'
         'body{margin:0}'
         '.stage{position:relative;width:' + str(width) + 'px;height:' + str(height) + 'px;}'
         '.soap{animation:none !important}'          # 关动画，保证几何位置确定
         '.soap-film{animation:none !important}'
-        '.soap-text{visibility:hidden}'             # 只留文字底下的背景
+        + glyph_rule +
         '</style></head><body><div class="stage">' + "".join(cells) + '</div></body></html>'
     )
 
 
-def text_color_luminance():
-    """从 CSS token 里读出泡泡文字色，跟着设计系统走。"""
+def _hex_luminance(h: str):
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return luminance(r, g, b)
+
+
+def text_color_luminance(mode: str = "light"):
+    """从 CSS token 里读出泡泡文字色。兼容裸 hex 与 light-dark(亮, 暗) 两种写法。"""
     css = (shoot.CSS_DIR / "style.css").read_text(encoding="utf-8")
-    m = re.search(r'--soap-text-color:\s*#([0-9a-fA-F]{6})', css)
+    m = re.search(r'--soap-text-color:\s*([^;]+);', css)
     if not m:
         raise SystemExit("CSS 里找不到 --soap-text-color")
-    h = m.group(1)
-    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-    return luminance(r, g, b), "#" + h
+    val = m.group(1).strip()
+    ld = re.fullmatch(
+        r'light-dark\(\s*#([0-9a-fA-F]{6})\s*,\s*#([0-9a-fA-F]{6})\s*\)', val)
+    if ld:
+        h = ld.group(1) if mode == "light" else ld.group(2)
+        return _hex_luminance(h), "#" + h
+    plain = re.fullmatch(r'#([0-9a-fA-F]{6})', val)
+    if plain:
+        h = plain.group(1)
+        return _hex_luminance(h), "#" + h
+    raise SystemExit(f"--soap-text-color 写法无法解析：{val}")
 
 
 def self_test():
@@ -175,48 +207,90 @@ def self_test():
         raise SystemExit("PNG 解码器不可信，终止")
 
 
-def main():
-    shoot.prepare()
-    self_test()
-    page = shoot.HTML_DIR / "contrast.html"
-    page.write_text(build_page(), encoding="utf-8")
+def glyph_stats(px_text, px_bg, w, channels, x0, y0, x1, y1, text_lum):
+    """只在"字形真实覆盖的像素"上算对比度。
+
+    两帧差分定位墨迹：有字帧 vs 无字帧，差值超阈值的像素 = 字形（含光晕）。
+    对墨迹像素取"无字帧"的同位置像素当背景——这才是文字底下的"底"。
+    此前用固定方块采样，会把文字永远到不了的左上角高光区算进来，冤枉设计。
+    """
+    total, n = 0.0, 0
+    worst = 99.0
+    for y in range(y0, y1):
+        base = y * w * channels
+        for x in range(x0, x1):
+            i = base + x * channels
+            dt = abs(px_text[i] - px_bg[i]) + abs(px_text[i + 1] - px_bg[i + 1]) \
+                + abs(px_text[i + 2] - px_bg[i + 2])
+            if dt < 16:      # 非墨迹像素：字形没盖到这，不参与判定
+                continue
+            lum = luminance(px_bg[i], px_bg[i + 1], px_bg[i + 2])
+            total += lum
+            n += 1
+            worst = min(worst, contrast_ratio(text_lum, lum))
+    if n == 0:
+        return 0.0, 99.0, 0
+    return total / n, worst, n
+
+
+def run_mode(mode: str):
+    """对一种模式（light/dark）：两帧差分定位墨迹，逐情绪报对比度。"""
+    page_text = shoot.HTML_DIR / f"contrast_{mode}_text.html"
+    page_bg = shoot.HTML_DIR / f"contrast_{mode}_bg.html"
+    page_text.write_text(build_page(mode, hide_glyphs=False), encoding="utf-8")
+    page_bg.write_text(build_page(mode, hide_glyphs=True), encoding="utf-8")
 
     width = MARGIN * 2 + COLS * BUBBLE + (COLS - 1) * GAP
     height = MARGIN * 2 + 2 * BUBBLE + GAP
-    png = shoot.PNG_DIR / "contrast.png"
-    if not shoot.chrome_shot(page, png, width, height, scale=1):
-        print("截图失败")
-        return
+    png_text = shoot.PNG_DIR / f"contrast_{mode}_text.png"
+    png_bg = shoot.PNG_DIR / f"contrast_{mode}_bg.png"
+    if not shoot.chrome_shot(page_text, png_text, width, height, scale=1):
+        print(f"[{mode}] 有字帧截图失败")
+        return []
+    if not shoot.chrome_shot(page_bg, png_bg, width, height, scale=1):
+        print(f"[{mode}] 无字帧截图失败")
+        return []
 
-    w, h, channels, pixels = decode_png(png)
-    print(f"截图 {w}x{h}，{channels} 通道")
-
-    # 自检：几何必须对得上，否则坐标就是错的
+    w, h, ch, px_text = decode_png(png_text)
+    w2, h2, ch2, px_bg = decode_png(png_bg)
+    assert (w, h, ch) == (w2, h2, ch2), "两帧几何不一致，差分无意义"
     assert (w, h) == (width, height), f"尺寸不符：{w}x{h} != {width}x{height}"
+    print(f"[{mode}] 截图 {w}x{h}")
 
     from src.server_app import ALL_EMOTIONS
-    text_lum, text_hex = text_color_luminance()
-    print(f"文字色 {text_hex}（亮度 {text_lum:.3f}）")
-    print(f"\n{'情绪':<8}{'底亮度范围':>18}{'平均对比度':>12}{'最小对比度':>12}  判定")
+    text_lum, text_hex = text_color_luminance(mode)
+    print(f"[{mode}] 文字色 {text_hex}（亮度 {text_lum:.3f}）")
+    print(f"{'情绪':<8}{'墨迹像素':>10}{'平均对比度':>12}{'最小对比度':>12}  判定")
     failures = []
     for idx, emo in enumerate(ALL_EMOTIONS):
         left = MARGIN + (idx % COLS) * (BUBBLE + GAP)
         top = MARGIN + (idx // COLS) * (BUBBLE + GAP)
         cx, cy = left + BUBBLE // 2, top + BUBBLE // 2
-        mean_lum, lo, hi, c_min = region_stats(
-            pixels, w, channels, cx - SAMPLE, cy - SAMPLE, cx + SAMPLE, cy + SAMPLE, text_lum)
-        c_mean = contrast_ratio(text_lum, mean_lum)
+        mean_lum, c_min, n = glyph_stats(
+            px_text, px_bg, w, ch, cx - SAMPLE, cy - SAMPLE, cx + SAMPLE, cy + SAMPLE, text_lum)
+        c_mean = contrast_ratio(text_lum, mean_lum) if mean_lum else 0
         ok = "通过" if c_min >= 3.0 else "不足"
         if c_min < 3.0:
-            failures.append((emo, c_min))
-        print(f"{emo:<8}{f'{lo:.2f}~{hi:.2f}':>18}{c_mean:>12.2f}{c_min:>12.2f}  {ok}")
+            failures.append((mode, emo, c_min))
+        print(f"{emo:<8}{n:>10}{c_mean:>12.2f}{c_min:>12.2f}  {ok}")
+    print(f"探针截图：{png_bg}\n")
+    return failures
 
-    print("\n判据：加粗大字按 WCAG 大文本标准需 ≥ 3.0:1（最小对比度 = 采样区内逐像素最小值）")
+
+def main():
+    shoot.prepare()
+    self_test()
+    modes = list(_load_palettes().keys())     # 改造前只有 light，改造后 light+dark
+    failures = []
+    for mode in modes:
+        failures += run_mode(mode)
+
+    print("判据：加粗大字按 WCAG 大文本标准需 ≥ 3.0:1（最小对比度 = 采样区内逐像素最小值）")
     if failures:
-        print("未达标：" + "、".join(f"{e}({c:.2f}:1)" for e, c in failures))
+        print("未达标：" + "、".join(f"[{m}]{e}({c:.2f}:1)" for m, e, c in failures))
+        sys.exit(1)
     else:
         print("全部达标。")
-    print(f"\n探针截图：{png}")
 
 
 if __name__ == "__main__":

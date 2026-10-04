@@ -22,19 +22,32 @@ _TOKEN_KEYS = ("font_sizes", "radii", "shadows", "spacing")
 
 # ==================== token 指标 ====================
 def _split_root(text):
-    """返回 (消费处, :root块)。"""
-    m = re.search(r':root\s*\{', text)
-    if not m:
+    """返回 (消费处, :root块)。
+
+    提取**所有** :root 块（含 @media 内的）拼在一起——双主题改造后
+    颜色值只允许出现在 :root 内（light-dark() 双值写法），其余一律视为消费处。
+    """
+    spans = []
+    for m in re.finditer(r':root\s*\{', text):
+        start = m.end()
+        depth, i = 1, start
+        while i < len(text) and depth > 0:
+            if text[i] == '{':
+                depth += 1
+            elif text[i] == '}':
+                depth -= 1
+            i += 1
+        spans.append((m.start(), i))
+    if not spans:
         return text, ""
-    start = m.end()
-    depth, i = 1, start
-    while i < len(text) and depth > 0:
-        if text[i] == '{':
-            depth += 1
-        elif text[i] == '}':
-            depth -= 1
-        i += 1
-    return text[:m.start()] + text[i:], text[m.start():i]
+    consumer = []
+    prev = 0
+    for s, e in spans:
+        consumer.append(text[prev:s])
+        prev = e
+    consumer.append(text[prev:])
+    root_block = "\n".join(text[s:e] for s, e in spans)
+    return "".join(consumer), root_block
 
 
 def _scan(text):
@@ -83,7 +96,10 @@ def audit_tokens(text):
 
 # ==================== 类名指标 ====================
 def _classes_in_css(text):
-    text = re.sub(r':root\s*\{[^}]*\}', '', text)
+    # 去掉所有 :root 块（可能多个、可能嵌在 @media 内、内部可能有嵌套括号）
+    text, _ = _split_root(text)
+    # 注释必须先剥掉——注释里的 "unseen.co" 这类文本会被误当类名
+    text = re.sub(r'/\*.*?\*/', '', text, flags=re.S)
     text = re.sub(r'@keyframes\s+[\w-]+\s*\{(?:[^{}]|\{[^{}]*\})*\}', '', text, flags=re.S)
     found = set()
     for selector in re.findall(r'([^{}]+)\{', text):

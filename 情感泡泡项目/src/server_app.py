@@ -22,19 +22,26 @@ EMOTION_ICONS = {
     "开心": "😊", "难过": "😢", "孤独": "🥺",
     "焦虑": "😰", "寻求建议": "💡", "找人倾诉": "🗣️",
 }
-# (浅色, 主色, 背景色)
+# (浅色, 主色, 背景色)——主色与背景色为 light-dark(亮, 暗)，随元素 color-scheme 自动取支
+def _ld(light, dark):
+    """亮/暗双值颜色：跟随元素 color-scheme，支持系统偏好与 data-theme 手动覆盖。"""
+    return f"light-dark({light},{dark})"
+
+
 EMOTION_COLORS = {
-    "开心": ("#FFE066", "#FFB800", "#FFF8DC"),
-    "难过": ("#74B9FF", "#0984E3", "#E8F4FD"),
-    "孤独": ("#C59BFF", "#8854D0", "#F3EAFF"),
-    "焦虑": ("#FF8A8A", "#FF4757", "#FFE8E8"),
-    "寻求建议": ("#7BED9F", "#2ED573", "#E8F8F0"),
-    "找人倾诉": ("#FFB78C", "#FF6348", "#FFF0E8"),
+    "开心": ("#FFE066", _ld("#FFB800", "#F5A524"), _ld("#FFF8DC", "rgba(245,165,36,.16)")),
+    "难过": ("#74B9FF", _ld("#0984E3", "#6FA8FF"), _ld("#E8F4FD", "rgba(59,111,224,.18)")),
+    "孤独": ("#C59BFF", _ld("#8854D0", "#A98BFF"), _ld("#F3EAFF", "rgba(123,90,214,.20)")),
+    "焦虑": ("#FF8A8A", _ld("#FF4757", "#FF7A93"), _ld("#FFE8E8", "rgba(224,74,110,.18)")),
+    "寻求建议": ("#7BED9F", _ld("#2ED573", "#3FD9A0"), _ld("#E8F8F0", "rgba(24,168,124,.18)")),
+    "找人倾诉": ("#FFB78C", _ld("#FF6348", "#FF9A5C"), _ld("#FFF0E8", "rgba(232,118,60,.18)")),
 }
 ALL_EMOTIONS = ["开心", "难过", "孤独", "焦虑", "寻求建议", "找人倾诉"]
 
 # ==================== 泡泡样式（确定性随机）====================
-_DREAMY = {
+# 泡泡膜色板：每情绪 5 色，亮/暗两套。
+# 暗色套取中明度、高饱和——深底上高明度浅色会变成荧光斑，膜层靠饱和度而非明度出彩。
+_DREAMY_LIGHT = {
     "开心": ["#ffe29a", "#ffd0a8", "#fff3c9", "#ffc4d6", "#ffe8b8"],
     "难过": ["#a8c8ff", "#8fb0ff", "#c9e8ff", "#e6e6ff", "#9ec5ff"],
     "孤独": ["#c9b8ff", "#b3a0ff", "#e6dcff", "#d8c8ff", "#c5b3ff"],
@@ -42,7 +49,15 @@ _DREAMY = {
     "寻求建议": ["#a8f0d8", "#8fe8c8", "#c9f5e6", "#b8f0e6", "#9ee8d0"],
     "找人倾诉": ["#ffd0a8", "#ffb88c", "#ffe0c8", "#ffc9a8", "#f5c0a0"],
 }
-_DREAMY_GLOW = {
+_DREAMY_DARK = {
+    "开心": ["#F5A524", "#E07B39", "#FFD98A", "#FF9E7D", "#E8963C"],
+    "难过": ["#3B6FE0", "#2A4FC4", "#6FA8FF", "#89B8FF", "#4A7FE8"],
+    "孤独": ["#7B5AD6", "#5B3FB8", "#A98BFF", "#C0A6FF", "#8B6AE0"],
+    "焦虑": ["#E04A6E", "#C22A52", "#FF7A93", "#FFA3AE", "#E85A7E"],
+    "寻求建议": ["#18A87C", "#0D8A66", "#3FD9A0", "#6FE8C4", "#28B88C"],
+    "找人倾诉": ["#E8763C", "#C4551C", "#FF9A5C", "#FFB98A", "#E8864C"],
+}
+_DREAMY_GLOW_LIGHT = {
     "开心": "rgba(255,190,110,.5)",
     "难过": "rgba(120,160,255,.5)",
     "孤独": "rgba(175,140,255,.5)",
@@ -50,25 +65,49 @@ _DREAMY_GLOW = {
     "寻求建议": "rgba(120,230,180,.5)",
     "找人倾诉": "rgba(255,170,120,.5)",
 }
+_DREAMY_GLOW_DARK = {
+    "开心": "rgba(255,170,60,.30)",
+    "难过": "rgba(70,130,255,.28)",
+    "孤独": "rgba(140,105,255,.28)",
+    "焦虑": "rgba(255,80,120,.28)",
+    "寻求建议": "rgba(40,220,160,.26)",
+    "找人倾诉": "rgba(255,130,60,.28)",
+}
+# 深色模式的中心内核：深底上的肥皂泡是"边缘亮、中心暗"（薄膜边缘效应），
+# 文字所在的中心必须压暗，否则近白文字对中明度膜色只有 ~2:1。
+_DREAMY_CORE_DARK = {
+    "开心": "rgba(80,50,8,.55)",
+    "难过": "rgba(12,24,60,.58)",
+    "孤独": "rgba(28,18,58,.58)",
+    "焦虑": "rgba(64,12,26,.58)",
+    "寻求建议": "rgba(6,48,34,.58)",
+    "找人倾诉": "rgba(66,26,8,.58)",
+}
 
 
 def _bubble_variant(bubble):
     """按泡泡 id 做确定性哈希，生成稳定的随机样式（刷新不闪烁）。"""
     key = (bubble["id"] + bubble["emotion_tag"]).encode("utf-8")
     seed = int(hashlib.md5(key).hexdigest(), 16)
-    emotion = bubble["emotion_tag"] if bubble["emotion_tag"] in _DREAMY else "开心"
-    palette = _DREAMY[emotion]
-    n = len(palette)
-    c1 = palette[seed % n]
-    c2 = palette[(seed >> 4) % n]
-    c3 = palette[(seed >> 8) % n]
-    c4 = palette[(seed >> 12) % n]
+    emotion = bubble["emotion_tag"] if bubble["emotion_tag"] in _DREAMY_LIGHT else "开心"
+    pal_l, pal_d = _DREAMY_LIGHT[emotion], _DREAMY_DARK[emotion]
+    n = len(pal_l)
+    # 同一组色位索引同时作用于亮/暗两套色板：同一 id 永远得到同一组合，刷新不闪烁；
+    # 具体取哪套由元素 color-scheme 决定（light-dark() 在内联样式里同样生效）。
+    i1, i2, i3, i4 = seed % n, (seed >> 4) % n, (seed >> 8) % n, (seed >> 12) % n
     content_len = len(bubble["content"])
     size = max(120, min(196, 122 + min(content_len, 24) * 3 + (seed % 16)))
     return {
         "size": size,
-        "c1": c1, "c2": c2, "c3": c3, "c4": c4,
-        "glow": _DREAMY_GLOW.get(emotion, "rgba(190,170,255,.5)"),
+        "c1": _ld(pal_l[i1], pal_d[i1]),
+        "c2": _ld(pal_l[i2], pal_d[i2]),
+        "c3": _ld(pal_l[i3], pal_d[i3]),
+        "c4": _ld(pal_l[i4], pal_d[i4]),
+        "glow": _ld(_DREAMY_GLOW_LIGHT.get(emotion, "rgba(190,170,255,.5)"),
+                    _DREAMY_GLOW_DARK.get(emotion, "rgba(150,120,255,.32)")),
+        # 中心内核：亮色模式下与 glow 同色（亮核）；深色模式下压暗（暗核，保文字对比度）
+        "core": _ld(_DREAMY_GLOW_LIGHT.get(emotion, "rgba(190,170,255,.5)"),
+                    _DREAMY_CORE_DARK.get(emotion, "rgba(20,14,44,.55)")),
         "dur": 6 + (seed % 5),
         "delay": (seed % 40) / 10.0,
         # 泡泡海布局：横向只做轻微抖动（换行交给 flex-wrap），

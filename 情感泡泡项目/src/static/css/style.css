@@ -5,45 +5,56 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
+  /* 双主题基石：所有颜色只允许以 light-dark(亮, 暗) 写在这一个 :root 里。
+     系统偏好自动切换；html[data-theme] 手动覆盖只改 color-scheme（见文件末尾），
+     浏览器随即重算所有 light-dark()，零 JS 参与颜色计算。 */
+  color-scheme: light dark;
+
   /* —— 品牌紫 —— */
-  --color-brand: #7C3AED;
-  --color-brand-light: #A78BFA;
-  --color-brand-border: #EDE9FE;
-  --color-brand-surface: #F3F0FF;
-  --color-brand-soft: rgba(167, 139, 250, .12);
-  --color-brand-soft-hover: rgba(167, 139, 250, .24);
+  --color-brand: light-dark(#7C3AED, #A78BFA);
+  --color-brand-light: light-dark(#A78BFA, #C4B5FD);
+  --color-brand-border: light-dark(#EDE9FE, rgba(167, 139, 250, .28));
+  --color-brand-surface: light-dark(#F3F0FF, #1E1840);
+  --color-brand-soft: light-dark(rgba(167, 139, 250, .12), rgba(167, 139, 250, .16));
+  --color-brand-soft-hover: light-dark(rgba(167, 139, 250, .24), rgba(167, 139, 250, .28));
+  /* 按钮渐变独立成 token：深色下必须反向。
+     白字在 #A78BFA 上只有 2.72:1（不合格），#7C3AED→#6D28D9 才有 7.10:1 */
+  --color-brand-btn-from: light-dark(#A78BFA, #7C3AED);
+  --color-brand-btn-to: light-dark(#7C3AED, #6D28D9);
 
   /* —— 文字灰阶 —— */
-  --color-text-strong: #333;
-  --color-text: #444;
-  --color-text-secondary: #666;
-  --color-text-muted: #999;
-  --color-text-faint: #bbb;
+  --color-text-strong: light-dark(#333, #F5F3FF);
+  --color-text: light-dark(#444, #E8E4F5);
+  --color-text-secondary: light-dark(#666, #C9C2E0);
+  --color-text-muted: light-dark(#999, #A79FC4);
+  --color-text-faint: light-dark(#bbb, #8B82A8);
   --color-white: #fff;
   --color-text-inverse: var(--color-white);
 
-  /* —— 表面（半透明白，靠模糊制造层次）—— */
-  --color-surface-card: rgba(255, 255, 255, .92);
-  --color-surface-panel: rgba(255, 255, 255, .9);
-  --color-surface-input: rgba(255, 255, 255, .85);
-  --color-surface-nav: rgba(255, 255, 255, .82);
-  --color-surface-soft: rgba(255, 255, 255, .7);
+  /* —— 表面（深色下更不透明：透光=发灰）—— */
+  --color-surface-card: light-dark(rgba(255, 255, 255, .92), rgba(30, 26, 54, .62));
+  --color-surface-panel: light-dark(rgba(255, 255, 255, .9), rgba(28, 24, 50, .66));
+  --color-surface-input: light-dark(rgba(255, 255, 255, .85), rgba(18, 15, 36, .72));
+  --color-surface-nav: light-dark(rgba(255, 255, 255, .82), rgba(14, 12, 30, .78));
+  --color-surface-soft: light-dark(rgba(255, 255, 255, .7), rgba(38, 33, 64, .55));
 
   /* —— 边框与遮罩 —— */
-  --color-border: rgba(200, 180, 255, .4);
-  --color-overlay: rgba(60, 40, 90, .16);
-  --color-overlay-strong: rgba(60, 40, 90, .22);
+  --color-border: light-dark(rgba(200, 180, 255, .4), rgba(167, 139, 250, .20));
+  --color-overlay: light-dark(rgba(60, 40, 90, .16), rgba(4, 2, 12, .62));
+  --color-overlay-strong: light-dark(rgba(60, 40, 90, .22), rgba(2, 1, 8, .74));
 
-  /* —— 页面背景渐变 —— */
-  --color-bg-1: #F0E6FF;
-  --color-bg-2: #FFE8F0;
-  --color-bg-3: #E6F0FF;
-  --color-bg-4: #F0FFE8;
+  /* —— 页面背景：同色相明度递进，消除"彩虹洗白"。
+     深色端走暖调近黑（#12101C），底部留一抹紫雾避免死黑 —— */
+  --color-bg-1: light-dark(#F4F0FF, #12101C);
+  --color-bg-2: light-dark(#EDE6FB, #1A1530);
+  --color-bg-3: light-dark(#E7EEFB, #141B33);
+  --color-bg-4: light-dark(#EFF7EA, #1D1342);
+  --color-bg-radial: light-dark(rgba(124, 58, 237, .10), rgba(124, 58, 237, .22));
 
   /* —— 语义色 —— */
-  --color-danger: #D63031;
-  --color-danger-bg: rgba(255, 71, 87, .12);
-  --color-danger-border: rgba(255, 71, 87, .3);
+  --color-danger: light-dark(#D63031, #FF6B7A);
+  --color-danger-bg: light-dark(rgba(255, 71, 87, .12), rgba(255, 71, 87, .16));
+  --color-danger-border: light-dark(rgba(255, 71, 87, .3), rgba(255, 107, 122, .4));
 
   /* —— 间距尺度（4px 基准）—— */
   --space-1: 4px;
@@ -66,72 +77,89 @@
   --radius-2xl: 22px;
   --radius-full: 50%;
 
-  /* —— 字号 —— */
-  --font-xs: 12px;
-  --font-sm: 13px;
-  --font-base: 14px;
-  --font-md: 15px;
-  --font-lg: 16px;
-  --font-xl: 20px;
-  --font-2xl: 24px;
-  --font-3xl: 28px;
-  --font-4xl: 32px;
+  /* —— 字号（流式：clamp 随视口平滑缩放，560-1440px 之间无跳变）—— */
+  --font-xs: clamp(11px, .7rem + .1vw, 12px);
+  --font-sm: clamp(12px, .76rem + .1vw, 13px);
+  --font-base: clamp(13px, .82rem + .1vw, 14px);
+  --font-md: clamp(14px, .86rem + .12vw, 15px);
+  --font-lg: clamp(15px, .9rem + .16vw, 16px);
+  --font-xl: clamp(18px, 1.02rem + .3vw, 20px);
+  --font-2xl: clamp(21px, 1.16rem + .4vw, 24px);
+  --font-3xl: clamp(24px, 1.32rem + .5vw, 28px);
+  --font-4xl: clamp(28px, 1.5rem + .7vw, 32px);
 
-  /* —— 阴影 —— */
-  --shadow-focus: 0 0 0 3px rgba(167, 139, 250, .18);
-  --shadow-card: 0 8px 30px rgba(167, 139, 250, .15);
-  --shadow-card-lift: 0 24px 60px rgba(124, 58, 237, .2);
-  --shadow-fab: 0 8px 24px rgba(124, 58, 237, .35);
-  --shadow-panel: -14px 0 44px rgba(120, 80, 200, .18);
+  /* —— 刘海屏/底部手势区安全边距 —— */
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+
+  /* —— 阴影（深色下阴影更黑更收，辉光更彩）—— */
+  --shadow-focus: light-dark(0 0 0 3px rgba(167, 139, 250, .18), 0 0 0 3px rgba(167, 139, 250, .38));
+  --shadow-card: light-dark(0 8px 30px rgba(167, 139, 250, .15), 0 8px 30px rgba(0, 0, 0, .44));
+  --shadow-card-lift: light-dark(0 24px 60px rgba(124, 58, 237, .2), 0 24px 60px rgba(0, 0, 0, .6));
+  --shadow-fab: light-dark(0 8px 24px rgba(124, 58, 237, .35), 0 8px 28px rgba(124, 58, 237, .48));
+  --shadow-panel: light-dark(-14px 0 44px rgba(120, 80, 200, .18), -14px 0 44px rgba(0, 0, 0, .58));
   --shadow-ornament:
-    0 0 46px rgba(190, 170, 255, .5),
-    inset 0 0 0 1.5px rgba(255, 255, 255, .8),
-    inset 0 -16px 32px rgba(120, 80, 190, .16);
+    0 0 46px light-dark(rgba(190, 170, 255, .5), rgba(140, 110, 255, .34)),
+    inset 0 0 0 1.5px light-dark(rgba(255, 255, 255, .8), rgba(200, 215, 255, .45)),
+    inset 0 -16px 32px light-dark(rgba(120, 80, 190, .16), rgba(0, 0, 0, .46));
 
-  /* —— 虹彩油膜（泡泡膜与登录页装饰共用）—— */
-  --iris-1: #ffd6f5;
-  --iris-2: #ffb3d1;
-  --iris-3: #ffe29a;
-  --iris-4: #b8f0e6;
+  /* —— 虹彩油膜（深色端降明度提饱和，免得在深底上发荧光）—— */
+  --iris-1: light-dark(#ffd6f5, #B85AC8);
+  --iris-2: light-dark(#ffb3d1, #C24A7E);
+  --iris-3: light-dark(#ffe29a, #D89A30);
+  --iris-4: light-dark(#b8f0e6, #2FA88C);
 
   /* —— 玻璃表面 —— */
-  --color-glass: rgba(255, 255, 255, .74);
-  --color-glass-border: rgba(255, 255, 255, .75);
-  --color-glass-sheen: rgba(255, 255, 255, .95);
+  --color-glass: light-dark(rgba(255, 255, 255, .74), rgba(22, 19, 42, .62));
+  --color-glass-border: light-dark(rgba(255, 255, 255, .75), rgba(167, 139, 250, .22));
+  --color-glass-sheen: light-dark(rgba(255, 255, 255, .95), rgba(255, 255, 255, .10));
   /* 装饰泡泡：更锐的顶侧高光，配亮边环才"成球" */
   --grad-ornament: radial-gradient(circle at 34% 26%,
       rgba(255, 255, 255, .96), rgba(255, 255, 255, .22) 34%, rgba(255, 255, 255, .05) 58%);
   /* 白色薄雾：把锥形渐变压成柔和虹彩，免得看着像沙滩球 */
   --grad-veil: linear-gradient(rgba(255, 255, 255, .45), rgba(255, 255, 255, .45));
 
-  /* —— 泡泡材质（.soap 的"玻璃配方"，集中在此便于统一调）—— */
-  --soap-gloss: rgba(255, 255, 255, .78);         /* 顶侧亮面 */
-  --soap-veil: rgba(255, 255, 255, .15);          /* 中间薄膜 */
-  --soap-faint: rgba(255, 255, 255, .04);         /* 边缘残留 */
-  --soap-halo: rgba(255, 255, 255, .6);           /* 外发光 / 涟漪环 */
-  --soap-halo-hover: rgba(255, 255, 255, .9);
-  --soap-halo-active: rgba(255, 255, 255, 1);
-  --soap-rim: rgba(255, 255, 255, .5);            /* 亮边环 + 悬停内光 */
-  --soap-inner-top: rgba(255, 255, 255, .4);      /* 顶部内发光 */
-  --soap-inner-active: rgba(255, 255, 255, .55);
-  --soap-inner-bottom: rgba(110, 75, 175, .16);   /* 底部内阴影 = 体积 */
-  --soap-ground: rgba(110, 80, 190, .3);          /* 落地投影 */
-  --soap-emoji-glow: rgba(255, 255, 255, .7);
-  --soap-glow-default: rgba(190, 170, 255, .5);   /* --glow 的兜底色 */
-  /* 文字：浅色泡泡上必须用深色字，白字实测只有 ~1.2:1（远低于 3:1） */
-  --soap-text-color: #3F2A61;
-  --soap-text-halo: rgba(255, 255, 255, .6);
+  /* —— 泡泡材质（深色下配方反转："亮边 + 暗腔"——亮边环更亮、内阴影换纯黑造体积）—— */
+  --soap-gloss: light-dark(rgba(255, 255, 255, .78), rgba(255, 255, 255, .42));
+  --soap-veil: light-dark(rgba(255, 255, 255, .15), rgba(255, 255, 255, .06));
+  --soap-faint: light-dark(rgba(255, 255, 255, .04), rgba(255, 255, 255, .02));
+  --soap-halo: light-dark(rgba(255, 255, 255, .6), rgba(180, 200, 255, .22));
+  --soap-halo-hover: light-dark(rgba(255, 255, 255, .9), rgba(200, 215, 255, .34));
+  --soap-halo-active: light-dark(rgba(255, 255, 255, 1), rgba(220, 230, 255, .46));
+  --soap-rim: light-dark(rgba(255, 255, 255, .5), rgba(255, 255, 255, .62));
+  --soap-inner-top: light-dark(rgba(255, 255, 255, .4), rgba(255, 255, 255, .14));
+  --soap-inner-active: light-dark(rgba(255, 255, 255, .55), rgba(255, 255, 255, .22));
+  --soap-inner-bottom: light-dark(rgba(110, 75, 175, .16), rgba(0, 0, 0, .40));
+  --soap-ground: light-dark(rgba(110, 80, 190, .3), rgba(0, 0, 0, .46));
+  --soap-emoji-glow: light-dark(rgba(255, 255, 255, .7), rgba(0, 0, 0, .55));
+  --soap-glow-default: light-dark(rgba(190, 170, 255, .5), rgba(150, 120, 255, .32));
+  /* 文字在深色下必须反转为近白：深字 #3F2A61 在深底上不可读。
+     #F2EEFF 对深膜实测 12~13:1（probe_contrast.py --dark 验证） */
+  --soap-text-color: light-dark(#3F2A61, #F2EEFF);
+  --soap-text-halo: light-dark(rgba(255, 255, 255, .6), rgba(0, 0, 0, .42));
+  /* 文字底衬：深色模式下虹彩膜覆盖整个球面（含中心），膜色是中明度亮色，
+     白字直接压上去只有 ~2:1。在文字正后方垫一层暗晕，把局部对比度拉回 4:1 级 */
+  --soap-text-scrim: light-dark(rgba(0, 0, 0, 0), rgba(10, 6, 24, .55));
   --soap-text-inset: 16%;                         /* 文字距泡泡边缘的比例 */
 }
 
 body {
   font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
   min-height: 100vh;
-  background: linear-gradient(135deg, var(--color-bg-1) 0%, var(--color-bg-2) 30%, var(--color-bg-3) 60%, var(--color-bg-4) 100%);
+  /* 径向聚光打底 + 同色相明度渐变：用明度做纵深，不再用色相做装饰 */
+  background:
+    radial-gradient(ellipse 90% 60% at 50% 0%, var(--color-bg-radial), transparent 70%),
+    linear-gradient(135deg, var(--color-bg-1) 0%, var(--color-bg-2) 30%, var(--color-bg-3) 60%, var(--color-bg-4) 100%);
   background-attachment: fixed;
   color: var(--color-text);
   line-height: 1.6;
 }
+
+/* ===== 手动主题覆盖 =====
+   只改 color-scheme，不写任何颜色值——:root 里的 light-dark() 会随之自动取支。
+   未指定 data-theme 时 = 跟随系统（:root 的 color-scheme: light dark）。 */
+html[data-theme="light"] { color-scheme: light; }
+html[data-theme="dark"] { color-scheme: dark; }
 
 a { text-decoration: none; color: var(--color-brand); }
 
@@ -140,13 +168,13 @@ a { text-decoration: none; color: var(--color-brand); }
 /* ===== 顶栏 ===== */
 .navbar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: var(--space-3) var(--space-6);
+  padding: calc(var(--space-3) + var(--safe-t)) var(--space-6) var(--space-3);
   background: var(--color-surface-nav);
   border-bottom: 1px solid var(--color-border);
   backdrop-filter: blur(8px);
   position: sticky; top: 0; z-index: 10;
 }
-.brand { font-size: var(--font-xl); font-weight: 700; color: var(--color-brand); }
+.brand { font-size: var(--font-xl); font-weight: 700; color: var(--color-brand); letter-spacing: -.01em; }
 .nav-links { display: flex; align-items: center; gap: var(--space-4); }
 .nav-links a { font-weight: 600; }
 .nav-user { color: var(--color-text-secondary); font-size: var(--font-base); }
@@ -155,7 +183,7 @@ a { text-decoration: none; color: var(--color-brand); }
 /* ===== 按钮 ===== */
 .btn-primary {
   display: inline-block;
-  background: linear-gradient(90deg, var(--color-brand-light), var(--color-brand));
+  background: linear-gradient(90deg, var(--color-brand-btn-from), var(--color-brand-btn-to));
   color: var(--color-text-inverse); border: none; border-radius: var(--radius-2xl);
   padding: var(--space-3) var(--space-5); font-size: var(--font-base); font-weight: 700; cursor: pointer;
   transition: filter .15s, transform .1s;
@@ -192,13 +220,13 @@ a { text-decoration: none; color: var(--color-brand); }
   padding: var(--space-2) var(--space-3); border-radius: var(--radius-xl); background: var(--color-surface-soft);
   border: 1px solid var(--color-brand-border); color: var(--color-text-secondary); font-size: var(--font-base);
 }
-.chip.active { background: linear-gradient(90deg, var(--color-brand-light), var(--color-brand)); color: var(--color-text-inverse); border-color: transparent; }
+.chip.active { background: linear-gradient(90deg, var(--color-brand-btn-from), var(--color-brand-btn-to)); color: var(--color-text-inverse); border-color: transparent; }
 
 /* ===== 悬浮发布按钮 ===== */
 .fab {
-  position: fixed; right: var(--space-7); bottom: var(--space-7);
+  position: fixed; right: var(--space-7); bottom: calc(var(--space-7) + var(--safe-b));
   width: 60px; height: 60px; border-radius: var(--radius-full);
-  background: linear-gradient(135deg, var(--color-brand-light), var(--color-brand));
+  background: linear-gradient(135deg, var(--color-brand-btn-from), var(--color-brand-btn-to));
   color: var(--color-text-inverse); font-size: var(--font-4xl); font-weight: 700;
   display: flex; align-items: center; justify-content: center;
   box-shadow: var(--shadow-fab); z-index: 20;
@@ -261,14 +289,15 @@ a { text-decoration: none; color: var(--color-brand); }
   border: 1px solid var(--color-glass-border);
   box-shadow: var(--shadow-card-lift), inset 0 1px 0 var(--color-glass-sheen);
 }
-.auth-logo { color: var(--color-brand); font-size: var(--font-3xl); }
+/* 展示级标题：大号字 + 负字距拉开层级（参考 unseen.co 的排版手法），不靠更粗的字重 */
+.auth-logo { color: var(--color-brand); font-size: var(--font-4xl); font-weight: 700; letter-spacing: -.02em; }
 .auth-sub { color: var(--color-text-muted); margin: var(--space-2) 0 var(--space-5); }
 .tabs { display: flex; gap: var(--space-2); margin-bottom: var(--space-5); }
 .tab {
   flex: 1; padding: var(--space-3); border: 1px solid var(--color-brand-border); border-radius: var(--radius-lg);
   background: transparent; color: var(--color-text-secondary); font-size: var(--font-base); font-weight: 600; cursor: pointer;
 }
-.tab.active { background: linear-gradient(90deg, var(--color-brand-light), var(--color-brand)); color: var(--color-text-inverse); border-color: transparent; }
+.tab.active { background: linear-gradient(90deg, var(--color-brand-btn-from), var(--color-brand-btn-to)); color: var(--color-text-inverse); border-color: transparent; }
 .auth-card form { display: flex; flex-direction: column; gap: var(--space-3); }
 
 /* ===== 情感标签选择 ===== */
@@ -277,7 +306,7 @@ a { text-decoration: none; color: var(--color-brand); }
 .emo-option input { position: absolute; opacity: 0; pointer-events: none; }
 .emo-option span {
   display: inline-block; padding: var(--space-2) var(--space-3); border: 2px solid var(--color-brand-border);
-  border-radius: var(--radius-xl); background: var(--color-white); cursor: pointer; font-size: var(--font-base);
+  border-radius: var(--radius-xl); background: var(--color-surface-input); cursor: pointer; font-size: var(--font-base);
 }
 /* 选中态用「浅色底 + 深色字 + 情绪色描边」。
    原来是把情绪色直接铺底配白字——情绪色都偏亮，白字对比度只有 ~1.7:1。 */
@@ -291,8 +320,10 @@ a { text-decoration: none; color: var(--color-brand); }
 /* ===== 肥皂泡泡组件 ===== */
 .soap {
   position: relative;
-  width: var(--size, 170px);
-  height: var(--size, 170px);
+  /* --size 是内联变量（媒体查询改不了），用 --size-scale 系数做整体缩放 */
+  --size-effective: calc(var(--size, 170px) * var(--size-scale, 1));
+  width: var(--size-effective);
+  height: var(--size-effective);
   border-radius: var(--radius-full);
   cursor: pointer;
   display: inline-flex;
@@ -300,9 +331,9 @@ a { text-decoration: none; color: var(--color-brand); }
   justify-content: center;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  /* 三层底：收紧的有色内核（让白字可读）+ 大面积通透的膜 + 顶侧高光 */
+  /* 三层底：收紧的有色内核（--core，深色下压暗保文字可读）+ 大面积通透的膜 + 顶侧高光 */
   background:
-    radial-gradient(circle at 50% 58%, var(--glow, var(--soap-glow-default)), transparent 54%),
+    radial-gradient(circle at 50% 58%, var(--core, var(--soap-glow-default)), transparent 54%),
     radial-gradient(circle at 30% 24%, var(--soap-gloss), var(--soap-veil) 42%, var(--soap-faint) 72%);
   /* 外发光 + 亮边环 + 底部内阴影（体积感） */
   box-shadow:
@@ -311,37 +342,25 @@ a { text-decoration: none; color: var(--color-brand); }
     inset 0 0 0 1.5px var(--soap-rim),
     inset 0 -16px 34px var(--soap-inner-bottom),
     inset 0 12px 26px var(--soap-inner-top);
-  scale: 1;
-  translate: 0 0;
   margin-left: var(--x, 0px);
   margin-top: var(--y, 0px);
-  transition: scale .32s cubic-bezier(.34,1.56,.64,1), box-shadow .32s ease;
-  animation: soap-fall var(--fall, 10s) ease-in-out infinite;
-  animation-delay: var(--delay, 0s);
+  /* 位移动画已全部交给 GSAP（motion.js）：入场飘落 / hover 歪头缩放 / 按压。
+     这里只保留 box-shadow 过渡——CSS 的独立 scale/translate 属性会和
+     GSAP 写的 transform 叠乘，造成 hover 双重重缩放，必须删掉。 */
+  transition: box-shadow .32s ease;
 }
 .soap:hover {
-  scale: 1.06;
   box-shadow:
     0 0 28px var(--soap-halo-hover),
     0 0 70px var(--glow, var(--soap-glow-default)),
     inset 0 0 26px var(--soap-rim);
 }
-.soap:active { scale: .94; }
 .soap.selected {
   scale: 1.08;
   box-shadow:
     0 0 30px var(--soap-halo-active),
     0 0 80px var(--glow, var(--soap-glow-default)),
     inset 0 0 28px var(--soap-inner-active);
-}
-.soap.fresh {
-  animation:
-    soap-fall var(--fall, 10s) ease-in-out infinite,
-    soap-emerge .7s ease-out;
-}
-@keyframes soap-emerge {
-  from { opacity: 0; scale: .4; }
-  to { opacity: 1; scale: 1; }
 }
 
 /* 虹彩油膜（旋转的肥皂膜色） */
@@ -356,6 +375,19 @@ a { text-decoration: none; color: var(--color-brand); }
   filter: blur(5px) saturate(1.7);
   animation: soap-spin var(--dur, 9s) linear infinite;
   pointer-events: none;
+}
+/* 深色下膜色收拢到边缘（薄膜干涉的边缘效应）：中心让位给暗核与文字暗衬。
+   mask 是图像值，light-dark() 只载颜色，所以手动/系统两条路分别写。
+   用 black/transparent 关键字，保持消费处零硬编码色值。 */
+html[data-theme="dark"] .soap-film {
+  -webkit-mask-image: radial-gradient(circle, transparent 46%, black 74%);
+  mask-image: radial-gradient(circle, transparent 46%, black 74%);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .soap-film {
+    -webkit-mask-image: radial-gradient(circle, transparent 46%, black 74%);
+    mask-image: radial-gradient(circle, transparent 46%, black 74%);
+  }
 }
 
 /* 顶侧高光 */
@@ -388,24 +420,24 @@ a { text-decoration: none; color: var(--color-brand); }
 /* 文字 */
 .soap-text {
   position: relative; z-index: 3;
-  display: flex; flex-direction: column; align-items: center; gap: var(--space-1);
-  text-align: center; padding: 0 var(--soap-text-inset);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-1);
+  min-width: 72%; min-height: 72%;
+  text-align: center; padding: var(--space-2) var(--soap-text-inset);
+  border-radius: var(--radius-full);
+  /* 暗衬覆盖文字实际可达范围（长文本半宽 ~68px）：实心段 66%，衰减到 100% */
+  background: radial-gradient(circle, var(--soap-text-scrim) 66%, transparent 100%);
   pointer-events: none;
 }
-.soap-emoji { font-size: calc(var(--size, 170px) * .22); line-height: 1; filter: drop-shadow(0 0 6px var(--soap-emoji-glow)); }
+.soap-emoji { font-size: calc(var(--size-effective, var(--size, 170px)) * .22); line-height: 1; filter: drop-shadow(0 0 6px var(--soap-emoji-glow)); }
 .soap-content {
   color: var(--soap-text-color); font-weight: 700;
-  font-size: calc(var(--size, 170px) * .12); line-height: 1.3;
+  font-size: calc(var(--size-effective, var(--size, 170px)) * .12); line-height: 1.3;
   /* 深色字配柔和白色光晕，保持"梦幻"感的同时把对比度拉上来 */
   text-shadow: 0 0 8px var(--soap-text-halo);
   overflow: hidden; word-break: break-word;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
 
-@keyframes soap-fall {
-  0%, 100% { translate: 0 0; }
-  50% { translate: 0 var(--drop, 18px); }
-}
 @keyframes soap-spin { to { transform: rotate(360deg); } }
 @keyframes soap-ripple {
   0% { transform: scale(.98); opacity: .6; }
@@ -419,7 +451,7 @@ a { text-decoration: none; color: var(--color-brand); }
   align-items: center;
   justify-content: center;
   gap: var(--space-5) var(--space-4);
-  padding: var(--space-8) var(--space-4) var(--space-11);
+  padding: var(--space-8) var(--space-4) calc(var(--space-11) + var(--safe-b));
 }
 
 /* ===== 侧栏 ===== */
@@ -492,13 +524,13 @@ a { text-decoration: none; color: var(--color-brand); }
   border-radius: var(--radius-lg); padding: var(--space-3) var(--space-4); margin-bottom: var(--space-2); cursor: pointer;
   transition: transform .12s, background .12s;
 }
-.conv-row:hover { transform: translateY(-2px); background: var(--color-white); }
+.conv-row:hover { transform: translateY(-2px); background: var(--color-surface-card); }
 /* 情绪色圆底头像位，让"来帮助我的人"一眼能区分 */
 .conv-emoji {
   width: 36px; height: 36px; flex: none;
   display: flex; align-items: center; justify-content: center;
   border-radius: var(--radius-full);
-  background: var(--color-white);
+  background: var(--color-surface-card);
   border: 1px solid var(--color-brand-border);
   font-size: var(--font-lg);
 }
@@ -510,7 +542,7 @@ a { text-decoration: none; color: var(--color-brand); }
 .msg.me { justify-content: flex-end; }
 .msg.other { justify-content: flex-start; }
 .msg-bubble { max-width: 72%; padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); }
-.msg.me .msg-bubble { background: linear-gradient(90deg, var(--color-brand-light), var(--color-brand)); color: var(--color-text-inverse); border-bottom-right-radius: var(--radius-xs); }
+.msg.me .msg-bubble { background: linear-gradient(90deg, var(--color-brand-btn-from), var(--color-brand-btn-to)); color: var(--color-text-inverse); border-bottom-right-radius: var(--radius-xs); }
 /* 对方的消息用白底+细边：面板本身是浅紫玻璃，同色系气泡会糊在一起 */
 .msg.other .msg-bubble {
   background: var(--color-surface-card); color: var(--color-text-strong);
@@ -521,8 +553,21 @@ a { text-decoration: none; color: var(--color-brand); }
 .msg-content { word-break: break-word; white-space: pre-wrap; }
 .msg-time { font-size: var(--font-xs); opacity: .7; text-align: right; margin-top: var(--space-1); }
 
+/* ===== 平板区间（561-1024px 原本是空白区）===== */
+@media (max-width: 1024px) {
+  .bubble-wall { --size-scale: .88; padding-left: var(--space-3); padding-right: var(--space-3); }
+  .sidebar { width: 380px; }
+}
+@media (max-width: 768px) {
+  .bubble-wall { --size-scale: .78; }
+  .sidebar { width: 340px; }
+  /* 侧栏变窄后按钮改单列，触摸目标更高 */
+  .panel-actions { grid-template-columns: 1fr; }
+}
+
 /* ===== 窄屏适配 =====
-   顶栏在 390px 下会把页面撑宽（横向溢出，泡泡被切掉），必须先收住它。 */
+   顶栏在 390px 下会把页面撑宽（横向溢出，泡泡被切掉），必须先收住它。
+   注意此块必须在 1024/768 块之后：500px 同时命中三条，靠书写顺序让 560 生效。 */
 @media (max-width: 560px) {
   .navbar { padding: var(--space-2) var(--space-4); gap: var(--space-3); flex-wrap: wrap; }
   .brand { font-size: var(--font-lg); }
@@ -530,8 +575,32 @@ a { text-decoration: none; color: var(--color-brand); }
   .nav-user { display: none; }          /* 窄屏放不下，省掉昵称 */
   .container { padding: var(--space-4) var(--space-3) var(--space-8); }
   .flash-wrap { padding: 0 var(--space-3); }
-  .bubble-wall { gap: var(--space-4) var(--space-2); padding: var(--space-5) var(--space-2) var(--space-10); }
+  .bubble-wall { --size-scale: .72; gap: var(--space-4) var(--space-2); padding: var(--space-5) var(--space-2) calc(var(--space-10) + var(--safe-b)); }
   .sidebar { width: 100%; }
+}
+
+/* ===== 触摸设备：44px 最小触摸目标。
+   用 pointer 而非宽度断点——iPad 触屏在 1024px 以上，宽度断点会漏掉它。 */
+@media (pointer: coarse) {
+  .panel-close { width: 44px; height: 44px; }
+  .chip { padding: var(--space-3) var(--space-4); min-height: 44px; display: inline-flex; align-items: center; }
+  .btn-ghost { min-height: 44px; }
+  .fab { width: 64px; height: 64px; }
+}
+
+/* ===== 降低动效（CSS 兜底）=====
+   motion.js 的 matchMedia 是第一道；这一道保证 JS 失效（离线/CSP/file://）时
+   循环动画依然全停——泡泡进出场由 motion.js 在 reduce 时自动放弃执行。 */
+@media (prefers-reduced-motion: reduce) {
+  .soap-film, .soap-ring, .orn {
+    animation: none !important;
+  }
+  /* 涟漪环留个静态残影：提示"这是活的"但不运动（WCAG 2.3.3 的通行替代） */
+  .soap-ring { opacity: .35; }
+  .sidebar, .sidebar-overlay, .modal-overlay, .modal-card,
+  .btn-primary, .fab, .conv-row, .soap {
+    transition-duration: .01ms !important;
+  }
 }
 
 /* ===== 发布弹窗 ===== */
@@ -547,6 +616,8 @@ a { text-decoration: none; color: var(--color-brand); }
 .modal-overlay.open { opacity: 1; pointer-events: auto; }
 .modal-card {
   width: 440px; max-width: 92vw;
+  max-height: calc(100vh - var(--safe-t) - var(--safe-b) - 4rem);
+  overflow-y: auto;
   /* 刻意不用玻璃：.modal-overlay 自己已经带了 backdrop-filter，
      内层再套一个 backdrop-filter 不会生效，背景会直接透上来压住标题文字。
      玻璃适合没有模糊父层的登录卡片，弹窗要的是可读性。 */

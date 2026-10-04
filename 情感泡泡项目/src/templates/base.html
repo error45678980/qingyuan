@@ -4,7 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}情感泡泡{% endblock %}</title>
+  <script>
+    // 防闪烁：CSS 加载前恢复用户手动选择的主题；无记录则不设，跟随系统
+    try { var _t = localStorage.getItem('eb-theme'); if (_t) document.documentElement.dataset.theme = _t; } catch (e) {}
+  </script>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="{{ url_for('static', filename='js/gsap.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/wall-sync.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/motion.js') }}"></script>
 </head>
 <body>
   {% if current_user %}
@@ -14,6 +21,7 @@
       <a href="{{ url_for('index') }}">泡泡墙</a>
       <a href="#" data-open-panel="{{ url_for('panel_conversations') }}">我的对话</a>
       <span class="nav-user">👤 {{ current_user['username'] }}</span>
+      <button type="button" class="btn-ghost" id="theme-toggle" aria-label="切换深浅色"></button>
       <form method="post" action="{{ url_for('logout') }}">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
         <button type="submit" class="btn-ghost">登出</button>
@@ -45,6 +53,27 @@
 
   <script>
   (function () {
+    // ===== 深浅色切换：只写 data-theme，颜色由 CSS 的 light-dark() 重算 =====
+    var themeBtn = document.getElementById('theme-toggle');
+    function currentTheme() {
+      return document.documentElement.dataset.theme ||
+        (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    }
+    function paintThemeIcon() {
+      if (themeBtn) themeBtn.textContent = currentTheme() === 'dark' ? '☀️' : '🌙';
+    }
+    if (themeBtn) {
+      themeBtn.addEventListener('click', function () {
+        var next = currentTheme() === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = next;
+        try { localStorage.setItem('eb-theme', next); } catch (e) {}
+        paintThemeIcon();
+      });
+      paintThemeIcon();
+      // 系统偏好变化时，未手动选择过的用户跟随系统
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', paintThemeIcon);
+    }
+
     var sidebar = document.getElementById('sidebar');
     var overlay = document.getElementById('sidebar-overlay');
     var body = document.getElementById('sidebar-body');
@@ -124,10 +153,24 @@
       var msgs = document.getElementById('panel-msgs');
       if (!msgs) return;
       fetch('/partial/chat/' + convId).then(function (r) { return r.text(); }).then(function (html) {
-        msgs.innerHTML = html;
-        localizeTimes(msgs);
-        msgs.scrollTop = msgs.scrollHeight;
+        syncMessages(msgs, html, true);
       });
+    }
+
+    // 聊天列表 keyed diff：消息只增不删（immutable），新消息滑入，节点复用不打断滚动
+    function syncMessages(msgs, html, forceScroll) {
+      if (!window.WallSync) { msgs.innerHTML = html; localizeTimes(msgs); return; }
+      if (html.trim() === (msgs._lastHtml || '')) return;   // 原始片段没变就跳过
+      msgs._lastHtml = html.trim();
+      var atBottom = forceScroll || (msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 40);
+      WallSync.sync(msgs, html, {
+        immutable: true,
+        onEnter: function (node) {
+          localizeTimes(node);
+          if (atBottom && window.WallMotion) WallMotion.msgEnter(node);
+        }
+      });
+      if (atBottom) msgs.scrollTop = msgs.scrollHeight;
     }
 
     // 聊天轮询（2 秒）
@@ -137,11 +180,8 @@
       var convId = form.getAttribute('data-conversation-id');
       var msgs = document.getElementById('panel-msgs');
       if (!msgs) return;
-      var atBottom = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 40;
       fetch('/partial/chat/' + convId).then(function (r) { return r.text(); }).then(function (html) {
-        msgs.innerHTML = html;
-        localizeTimes(msgs);
-        if (atBottom) msgs.scrollTop = msgs.scrollHeight;
+        syncMessages(msgs, html, false);
       }).catch(function () {});
     }, 2000);
   })();

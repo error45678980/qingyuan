@@ -30,6 +30,7 @@ WORK = Path(tempfile.gettempdir()) / "eb_shots"
 HTML_DIR = WORK / "html"
 PNG_DIR = WORK / "png"
 CSS_DIR = WORK / "css"
+JS_DIR = WORK / "js"
 DEMO_DB = WORK / "demo.db"
 CHROME = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 
@@ -37,10 +38,14 @@ CHROME = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 def prepare():
     if WORK.exists():
         shutil.rmtree(WORK, ignore_errors=True)
-    for d in (SHOTS, HTML_DIR, PNG_DIR, CSS_DIR):
+    for d in (SHOTS, HTML_DIR, PNG_DIR, CSS_DIR, JS_DIR):
         d.mkdir(parents=True, exist_ok=True)
-    # CSS 复制到 ASCII 路径，让 Chrome 只碰纯英文路径
+    # CSS/JS 复制到 ASCII 路径，让 Chrome 只碰纯英文路径
     shutil.copy(ROOT / "src" / "static" / "css" / "style.css", CSS_DIR / "style.css")
+    js_src = ROOT / "src" / "static" / "js"
+    if js_src.exists():
+        for f in js_src.glob("*.js"):
+            shutil.copy(f, JS_DIR / f.name)
 
     os.environ["EMOTION_BUBBLE_DB"] = str(DEMO_DB)
     os.environ["DATABASE_URL"] = ""          # 强制 SQLite，绝不碰生产 Neon
@@ -93,8 +98,16 @@ def seed():
 
 
 def to_static(html: str) -> str:
-    """把 CSS 引用改成本地 ASCII file:// 路径。"""
-    return html.replace("/static/css/style.css", (CSS_DIR / "style.css").as_uri())
+    """把 CSS/JS 引用改成本地 ASCII file:// 路径。"""
+    html = html.replace("/static/css/style.css", (CSS_DIR / "style.css").as_uri())
+    for f in JS_DIR.glob("*.js"):
+        html = html.replace(f"/static/js/{f.name}", (JS_DIR / f.name).as_uri())
+    return html
+
+
+def to_dark(html: str) -> str:
+    """注入手动深色主题（与 base.html 的 data-theme 手动切换同一机制）。"""
+    return html.replace('<html lang="zh-CN">', '<html lang="zh-CN" data-theme="dark">', 1)
 
 
 def open_sidebar(html: str, panel_html: str) -> str:
@@ -159,11 +172,14 @@ def main():
         s["user_id"] = 1            # 以「小明」身份渲染
 
     anon = app.test_client()
+    login = to_static(anon.get("/login").get_data(as_text=True))
     wall = client.get("/").get_data(as_text=True)
 
     pages = {
-        "01_login": (to_static(anon.get("/login").get_data(as_text=True)), 1440, 900),
+        "01_login": (login, 1440, 900),
+        "01_login_dark": (to_dark(login), 1440, 900),
         "02_wall": (to_static(wall), 1440, 1500),
+        "02_wall_dark": (to_dark(to_static(wall)), 1440, 1500),
         "03_publish_modal": (open_modal(to_static(wall)), 1440, 1000),
         "04_sidebar_author": (open_sidebar(to_static(wall),
                                            client.get(f"/partial/panel/bubble/{bubble_ids[0]}").get_data(as_text=True)), 1440, 1000),
@@ -176,7 +192,10 @@ def main():
     # 窄屏：Chrome 在 Windows 上最小窗口宽约 500px，--window-size 改不了布局视口。
     # 用 iframe 包一层，iframe 内部才有真正独立的 390px 视口。
     mobile_w, mobile_h = 390, 1400
-    MOBILE_PAGES = {"07_wall_mobile": to_static(wall)}
+    MOBILE_PAGES = {
+        "07_wall_mobile": to_static(wall),
+        "07_wall_mobile_dark": to_dark(to_static(wall)),
+    }
 
     total = len(pages) + len(MOBILE_PAGES)
     print(f"渲染 {total} 个页面 -> {SHOTS}")

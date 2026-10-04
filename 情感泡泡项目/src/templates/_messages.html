@@ -1,5 +1,5 @@
 {% for m in messages %}
-<div class="msg {{ 'me' if m['sender_nickname'] == current_user['username'] else 'other' }}">
+<div class="msg {{ 'me' if m['sender_nickname'] == current_user['username'] else 'other' }}" data-msg-id="{{ m['id'] }}">
   <div class="msg-bubble">
     {% if m['sender_nickname'] != current_user['username'] %}
       <div class="msg-name">{{ m['sender_nickname'] }}</div>
