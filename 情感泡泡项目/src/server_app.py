@@ -63,14 +63,17 @@ def _bubble_variant(bubble):
     c3 = palette[(seed >> 8) % n]
     c4 = palette[(seed >> 12) % n]
     content_len = len(bubble["content"])
-    size = max(112, min(190, 116 + min(content_len, 24) * 3 + (seed % 14)))
+    size = max(120, min(196, 122 + min(content_len, 24) * 3 + (seed % 16)))
     return {
         "size": size,
         "c1": c1, "c2": c2, "c3": c3, "c4": c4,
         "glow": _DREAMY_GLOW.get(emotion, "rgba(190,170,255,.5)"),
         "dur": 6 + (seed % 5),
         "delay": (seed % 40) / 10.0,
-        "x": (seed % 340) - 170,
+        # 泡泡海布局：横向只做轻微抖动（换行交给 flex-wrap），
+        # 纵向错落有致，制造"漂浮"而不是"排队"的感觉。
+        "x": (seed % 21) - 10,
+        "y": ((seed >> 3) % 45) - 22,
         "drop": 12 + (seed % 9),
         "fall": 8 + (seed % 7),
     }

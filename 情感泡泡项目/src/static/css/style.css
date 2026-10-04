@@ -99,7 +99,7 @@ body {
 
 a { text-decoration: none; color: var(--color-brand); }
 
-.container { max-width: 960px; margin: 0 auto; padding: var(--space-5) var(--space-4) var(--space-8); }
+.container { max-width: 1120px; margin: 0 auto; padding: var(--space-5) var(--space-4) var(--space-8); }
 
 /* ===== 顶栏 ===== */
 .navbar {
@@ -179,7 +179,7 @@ a { text-decoration: none; color: var(--color-brand); }
 .empty.big { font-size: var(--font-2xl); padding: var(--space-10) var(--space-5); }
 
 /* ===== Flash 消息 ===== */
-.flash-wrap { max-width: 960px; margin: var(--space-3) auto 0; padding: 0 var(--space-4); }
+.flash-wrap { max-width: 1120px; margin: var(--space-3) auto 0; padding: 0 var(--space-4); }
 .flash { padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); margin-bottom: var(--space-2); font-size: var(--font-base); }
 .flash.error { background: var(--color-danger-bg); color: var(--color-danger); border: 1px solid var(--color-danger-border); }
 
@@ -217,17 +217,21 @@ a { text-decoration: none; color: var(--color-brand); }
   justify-content: center;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  /* 半透明肥皂膜底 */
-  background: radial-gradient(circle at 32% 26%, rgba(255,255,255,.55), rgba(255,255,255,.07) 50%, rgba(255,255,255,.03) 75%);
-  /* 边缘柔光 + 内发光 */
+  /* 三层底：收紧的有色内核（让白字可读）+ 大面积通透的膜 + 顶侧高光 */
+  background:
+    radial-gradient(circle at 50% 58%, var(--glow, rgba(190,170,255,.5)), rgba(255,255,255,0) 54%),
+    radial-gradient(circle at 30% 24%, rgba(255,255,255,.78), rgba(255,255,255,.15) 42%, rgba(255,255,255,.04) 72%);
+  /* 外发光 + 亮边环 + 底部内阴影（体积感） */
   box-shadow:
-    0 0 18px rgba(255,255,255,.7),
+    0 0 18px rgba(255,255,255,.6),
     0 0 46px var(--glow, rgba(190,170,255,.5)),
-    inset 0 0 22px rgba(255,255,255,.35),
-    inset 0 -12px 28px rgba(255,255,255,.1);
+    inset 0 0 0 1.5px rgba(255,255,255,.5),
+    inset 0 -16px 34px rgba(110,75,175,.16),
+    inset 0 12px 26px rgba(255,255,255,.4);
   scale: 1;
   translate: 0 0;
   margin-left: var(--x, 0px);
+  margin-top: var(--y, 0px);
   transition: scale .32s cubic-bezier(.34,1.56,.64,1), box-shadow .32s ease;
   animation: soap-fall var(--fall, 10s) ease-in-out infinite;
   animation-delay: var(--delay, 0s);
@@ -262,8 +266,8 @@ a { text-decoration: none; color: var(--color-brand); }
   position: absolute; inset: 0;
   border-radius: var(--radius-full);
   background: conic-gradient(from 0deg, var(--c1,#ffd6f5), var(--c2,#ffb3d1), var(--c3,#ffe29a), var(--c4,#b8f0e6), var(--c1,#ffd6f5));
-  opacity: .42;
-  filter: blur(6px) saturate(1.4);
+  opacity: .62;
+  filter: blur(5px) saturate(1.7);
   animation: soap-spin var(--dur, 9s) linear infinite;
   pointer-events: none;
 }
@@ -304,9 +308,10 @@ a { text-decoration: none; color: var(--color-brand); }
 }
 .soap-emoji { font-size: calc(var(--size, 170px) * .22); line-height: 1; filter: drop-shadow(0 0 6px rgba(255,255,255,.7)); }
 .soap-content {
-  color: var(--color-text-inverse); font-weight: 600;
-  font-size: calc(var(--size, 170px) * .12); line-height: 1.35;
-  text-shadow: 0 0 8px rgba(255,255,255,.9), 0 1px 3px rgba(70,50,130,.4);
+  color: var(--color-white); font-weight: 700;
+  font-size: calc(var(--size, 170px) * .12); line-height: 1.3;
+  /* 深色投影把白字从浅色泡泡里"托"出来，而不是用白光糊成一片 */
+  text-shadow: 0 1px 2px rgba(64,40,105,.55), 0 2px 10px rgba(64,40,105,.38);
   overflow: hidden; word-break: break-word;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
@@ -321,13 +326,14 @@ a { text-decoration: none; color: var(--color-brand); }
   100% { transform: scale(1.32); opacity: 0; }
 }
 
-/* ===== 泡泡墙布局 ===== */
+/* ===== 泡泡墙布局：横向铺开的"泡泡海"，而不是一列 ===== */
 .bubble-wall {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-8);
-  padding: var(--space-8) var(--space-6) var(--space-11);
+  justify-content: center;
+  gap: var(--space-5) var(--space-4);
+  padding: var(--space-8) var(--space-4) var(--space-11);
 }
 
 /* ===== 侧栏 ===== */
@@ -399,6 +405,19 @@ a { text-decoration: none; color: var(--color-brand); }
 .msg-name { font-size: var(--font-xs); font-weight: 700; color: var(--color-brand); margin-bottom: 2px; }
 .msg-content { word-break: break-word; white-space: pre-wrap; }
 .msg-time { font-size: var(--font-xs); opacity: .7; text-align: right; margin-top: var(--space-1); }
+
+/* ===== 窄屏适配 =====
+   顶栏在 390px 下会把页面撑宽（横向溢出，泡泡被切掉），必须先收住它。 */
+@media (max-width: 560px) {
+  .navbar { padding: var(--space-2) var(--space-4); gap: var(--space-3); flex-wrap: wrap; }
+  .brand { font-size: var(--font-lg); }
+  .nav-links { gap: var(--space-3); font-size: var(--font-sm); }
+  .nav-user { display: none; }          /* 窄屏放不下，省掉昵称 */
+  .container { padding: var(--space-4) var(--space-3) var(--space-8); }
+  .flash-wrap { padding: 0 var(--space-3); }
+  .bubble-wall { gap: var(--space-4) var(--space-2); padding: var(--space-5) var(--space-2) var(--space-10); }
+  .sidebar { width: 100%; }
+}
 
 /* ===== 发布弹窗 ===== */
 .modal-overlay {

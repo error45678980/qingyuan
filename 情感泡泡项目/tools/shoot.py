@@ -64,6 +64,14 @@ def seed():
         (uid2, "小红", "有人也喜欢下雨天吗", "孤独"),
         (uid1, "小明", "刚面试完，感觉还行", "开心"),
         (uid2, "小红", "到底要不要换工作，好纠结", "寻求建议"),
+        (uid1, "小明", "想找个人说说话", "孤独"),
+        (uid2, "小红", "今天被夸了，开心一整天！", "开心"),
+        (uid1, "小明", "房租又要涨了，压力好大", "焦虑"),
+        (uid2, "小红", "有没有人跟我一样，越长大越不知道自己要什么", "寻求建议"),
+        (uid1, "小明", "谢谢你昨天陪我聊到那么晚", "开心"),
+        (uid2, "小红", "难过的时候你们都会做什么", "难过"),
+        (uid1, "小明", "一个人吃饭真的有点寂寞", "孤独"),
+        (uid2, "小红", "考研失败了，不知道该怎么办", "难过"),
     ]
     ids = []
     for i, (uid, name, content, emo) in enumerate(data):
@@ -110,6 +118,7 @@ def chrome_shot(html_path: Path, out: Path, width: int, height: int, scale: int 
     profile = WORK / f"profile-{uuid.uuid4().hex[:8]}"
     cmd = [
         CHROME, "--headless", "--disable-gpu", "--hide-scrollbars", "--no-first-run",
+        "--allow-file-access-from-files",       # 让 iframe 能加载同目录页面
         f"--user-data-dir={profile}",
         f"--force-device-scale-factor={scale}",
         f"--window-size={width},{height}",
@@ -150,23 +159,46 @@ def main():
                                                   client.get("/partial/panel/conversations").get_data(as_text=True)), 1440, 1000),
         "06_sidebar_chat": (open_sidebar(to_static(wall),
                                          client.get(f"/partial/panel/conversation/{conv_id}").get_data(as_text=True)), 1440, 1000),
-        "07_wall_mobile": (to_static(wall), 390, 1400),
     }
 
-    print(f"渲染 {len(pages)} 个页面 -> {SHOTS}")
+    # 窄屏：Chrome 在 Windows 上最小窗口宽约 500px，--window-size 改不了布局视口。
+    # 用 iframe 包一层，iframe 内部才有真正独立的 390px 视口。
+    mobile_w, mobile_h = 390, 1400
+    MOBILE_PAGES = {"07_wall_mobile": to_static(wall)}
+
+    total = len(pages) + len(MOBILE_PAGES)
+    print(f"渲染 {total} 个页面 -> {SHOTS}")
     ok = 0
-    for name, (html, w, h) in pages.items():
-        html_path = HTML_DIR / f"{name}.html"
-        html_path.write_text(html, encoding="utf-8")
-        png = PNG_DIR / f"{name}.png"
-        scale = 2 if w > 500 else 3
+
+    def emit(name, html_path, png, w, h, scale):
+        nonlocal ok
         if chrome_shot(html_path, png, w, h, scale):
             shutil.copy(png, SHOTS / f"{name}.png")
             ok += 1
             print(f"  [OK]   {name}.png  {w}x{h}  {png.stat().st_size // 1024}KB")
         else:
             print(f"  [FAIL] {name}")
-    print(f"\n完成 {ok}/{len(pages)} 张 -> {SHOTS}")
+
+    for name, (html, w, h) in pages.items():
+        html_path = HTML_DIR / f"{name}.html"
+        html_path.write_text(html, encoding="utf-8")
+        emit(name, html_path, PNG_DIR / f"{name}.png", w, h, 2)
+
+    for name, inner_html in MOBILE_PAGES.items():
+        inner = HTML_DIR / f"{name}__inner.html"
+        inner.write_text(inner_html, encoding="utf-8")
+        wrap = HTML_DIR / f"{name}.html"
+        wrap.write_text(
+            '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'
+            'html,body{margin:0;padding:0;background:#fff}'
+            f'iframe{{width:{mobile_w}px;height:{mobile_h}px;border:0;display:block}}'
+            '</style></head><body>'
+            f'<iframe src="{inner.name}"></iframe></body></html>',
+            encoding="utf-8")
+        # 外层窗口受 500px 下限约束，但 iframe 内部是真正的 390px 视口
+        emit(name, wrap, PNG_DIR / f"{name}.png", 500, mobile_h + 20, 2)
+
+    print(f"\n完成 {ok}/{total} 张 -> {SHOTS}")
 
 
 if __name__ == "__main__":
