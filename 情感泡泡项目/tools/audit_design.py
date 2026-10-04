@@ -56,11 +56,15 @@ def _non_token(counter):
 def audit_tokens(text):
     consumer_text, root_block = _split_root(text)
     consumer = _scan(consumer_text)
+    token_names = re.findall(r'(--[\w-]+)\s*:', root_block)
+    referenced = set(re.findall(r'var\((--[\w-]+)', text))
+    unused = sorted({n for n in token_names if n not in referenced})
     return dict(
         consumer=consumer,
         hardcoded={k: _non_token(consumer[k]) for k in _TOKEN_KEYS},
-        token_count=len(re.findall(r'(--[\w-]+)\s*:', root_block)),
+        token_count=len(token_names),
         var_refs=len(re.findall(r'var\(--[\w-]+', text)),
+        unused_tokens=unused,
     )
 
 
@@ -115,6 +119,11 @@ def render(tok, defined, used, missing, dead) -> str:
     lines.append(f"- 消费处硬编码圆角：**{len(h['radii'])} 种**")
     lines.append(f"- 消费处硬编码阴影：**{len(h['shadows'])} 种**")
     lines.append(f"- 消费处硬编码间距：**{len(h['spacing'])} 种**\n")
+
+    lines.append(f"- 定义了但没人用的 token（死 token）：**{len(tok['unused_tokens'])} 个**")
+    if tok["unused_tokens"]:
+        for n in tok["unused_tokens"]:
+            lines.append(f"  - `{n}`")
 
     lines.append("\n## 二、类名健康度\n")
     lines.append(f"- CSS 定义类名：**{len(defined)} 个** / 模板使用：**{len(used)} 个**")
