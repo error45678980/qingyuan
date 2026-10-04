@@ -34,3 +34,6 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# ===== 设计评审截图（tools/shoot.py 生成物）=====
+tools/shots/
