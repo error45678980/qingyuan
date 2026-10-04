@@ -3,58 +3,59 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>泡泡样板 · 情感泡泡</title>
+<title>材质试验台 · 情感泡泡</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 <style>
-  .preview-stage {
-    min-height: 100vh; display: flex; flex-wrap: wrap;
-    align-items: center; justify-content: center; gap: 70px; padding: 70px 40px 90px;
+  /* 打磨泡泡材质的专用页，不参与生产视觉。
+     关键手法：左右两栏只改 color-scheme，同一颗泡泡就能同时呈现亮/暗两套，
+     一次截图即可对照——不用来回切主题。 */
+  body { margin: 0; }
+  .lab { display: flex; flex-wrap: wrap; min-height: 100vh; }
+  .lab-col {
+    flex: 1 1 50%; min-width: 440px;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+    gap: 56px 40px; padding: 40px 24px 72px;
+    --size-scale: 1.7;                 /* 放大，才看得清薄膜与光 */
   }
-  .preview-hint {
-    position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
-    color: #8a7bb8; background: rgba(255,255,255,.65); padding: 8px 18px;
-    border-radius: 20px; font-size: 14px; z-index: 10; box-shadow: 0 2px 12px rgba(150,120,220,.15);
+  .lab-col h2 {
+    flex: 0 0 100%; margin: 0; text-align: center;
+    font: 600 12px/1 ui-monospace, monospace;
+    letter-spacing: .18em; text-transform: uppercase; opacity: .5;
   }
+  /* 背景取自真实页面的同一批 token，否则判断不了"折射"是否成立 */
+  .lab-col.light { color-scheme: light; background: var(--color-bg-base); }
+  .lab-col.dark  { color-scheme: dark;  background: var(--color-bg-base); }
 </style>
 </head>
 <body>
-  <div class="preview-hint">把鼠标移上去看「悬停」，点一下看「按下 + 选中」</div>
-  <div class="preview-stage">
-    <div class="soap" style="--size:190px; --c1:#ffd6f5; --c2:#ffb3d1; --c3:#ffe29a; --c4:#b8f0e6; --glow:rgba(255,150,200,.55); --dur:9s; --delay:0s;">
-      <span class="soap-film"></span>
-      <span class="soap-highlight"></span>
-      <span class="soap-ring"></span>
-      <span class="soap-ring ring-2"></span>
-      <span class="soap-shadow"></span>
-      <span class="soap-text"><span class="soap-emoji">🥺</span><span class="soap-content">最近有点孤独</span></span>
-    </div>
-
-    <div class="soap" style="--size:150px; --c1:#a8c8ff; --c2:#8fb0ff; --c3:#e6e6ff; --c4:#c9e8ff; --glow:rgba(120,160,255,.5); --dur:7s; --delay:1.2s;">
-      <span class="soap-film"></span>
-      <span class="soap-highlight"></span>
-      <span class="soap-ring"></span>
-      <span class="soap-ring ring-2"></span>
-      <span class="soap-shadow"></span>
-      <span class="soap-text"><span class="soap-emoji">😢</span><span class="soap-content">好想找人说说话</span></span>
-    </div>
-
-    <div class="soap" style="--size:120px; --c1:#ffe29a; --c2:#ffd0a8; --c3:#fff3c9; --c4:#ffc4d6; --glow:rgba(255,180,120,.5); --dur:6s; --delay:2.4s;">
-      <span class="soap-film"></span>
-      <span class="soap-highlight"></span>
-      <span class="soap-ring"></span>
-      <span class="soap-ring ring-2"></span>
-      <span class="soap-shadow"></span>
-      <span class="soap-text"><span class="soap-emoji">😊</span><span class="soap-content">今天超开心！</span></span>
-    </div>
+{# 用宏写一遍，两栏各自展开——类名必须写成字面量，
+   否则设计体检的类名扫描会把 .light/.dark 误判成死代码 #}
+{% macro lab_bubble(item) %}{% set v = item.v %}
+  <div class="soap"
+       style="--size:{{ v.size }}px; --x:0px; --y:0px; --drop:{{ v.drop }}px; --fall:{{ v.fall }}s; --c1:{{ v.c1 }}; --c2:{{ v.c2 }}; --c3:{{ v.c3 }}; --c4:{{ v.c4 }}; --glow:{{ v.glow }}; --core:{{ v.core }}; --dur:{{ v.dur }}s; --delay:{{ v.delay }}s;">
+    <span class="soap-film"></span>
+    <span class="soap-rim"></span>
+    <span class="soap-caustic"></span>
+    <span class="soap-highlight"></span>
+    <span class="soap-ring"></span>
+    <span class="soap-ring ring-2"></span>
+    <span class="soap-shadow"></span>
+    <span class="soap-text">
+      <span class="soap-emoji">{{ emotion_icons[item.emotion] }}</span>
+      <span class="soap-content">{{ item.content }}</span>
+    </span>
   </div>
+{% endmacro %}
 
-  <script>
-    document.querySelectorAll('.soap').forEach(function (b) {
-      b.addEventListener('click', function () {
-        document.querySelectorAll('.soap.selected').forEach(function (x) { x.classList.remove('selected'); });
-        b.classList.toggle('selected');
-      });
-    });
-  </script>
+<div class="lab">
+  <div class="lab-col light">
+    <h2>color-scheme: light</h2>
+    {% for item in bubbles %}{{ lab_bubble(item) }}{% endfor %}
+  </div>
+  <div class="lab-col dark">
+    <h2>color-scheme: dark</h2>
+    {% for item in bubbles %}{{ lab_bubble(item) }}{% endfor %}
+  </div>
+</div>
 </body>
 </html>

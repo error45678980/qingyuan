@@ -41,13 +41,15 @@ ALL_EMOTIONS = ["开心", "难过", "孤独", "焦虑", "寻求建议", "找人�
 # ==================== 泡泡样式（确定性随机）====================
 # 泡泡膜色板：每情绪 5 色，亮/暗两套。
 # 暗色套取中明度、高饱和——深底上高明度浅色会变成荧光斑，膜层靠饱和度而非明度出彩。
+# 亮色套：原来整组都是 ~90% 明度的粉彩，盖在浅背景上几乎看不见。
+# 往下压一档饱和度——仍然柔和，但薄膜色要"看得见"才谈得上虹彩。
 _DREAMY_LIGHT = {
-    "开心": ["#ffe29a", "#ffd0a8", "#fff3c9", "#ffc4d6", "#ffe8b8"],
-    "难过": ["#a8c8ff", "#8fb0ff", "#c9e8ff", "#e6e6ff", "#9ec5ff"],
-    "孤独": ["#c9b8ff", "#b3a0ff", "#e6dcff", "#d8c8ff", "#c5b3ff"],
-    "焦虑": ["#ffb3c7", "#ff9ec0", "#ffd6e0", "#ffc9da", "#f5b8d0"],
-    "寻求建议": ["#a8f0d8", "#8fe8c8", "#c9f5e6", "#b8f0e6", "#9ee8d0"],
-    "找人倾诉": ["#ffd0a8", "#ffb88c", "#ffe0c8", "#ffc9a8", "#f5c0a0"],
+    "开心": ["#ffd166", "#ffb877", "#ffe9a3", "#ffb3c9", "#ffdca0"],
+    "难过": ["#8fb8ff", "#6fa3ff", "#b3daff", "#c9c4ff", "#7fb0ff"],
+    "孤独": ["#b8a0ff", "#9d84ff", "#d4c4ff", "#c2b0ff", "#a88fff"],
+    "焦虑": ["#ff9eb8", "#ff85a8", "#ffc4d4", "#ffb3c8", "#ff95b0"],
+    "寻求建议": ["#8fe8c8", "#6fdcb4", "#b8f0dc", "#9ee8cc", "#7fe0bc"],
+    "找人倾诉": ["#ffbe8f", "#ffa570", "#ffd8b8", "#ffc4a0", "#ffb080"],
 }
 _DREAMY_DARK = {
     "开心": ["#F5A524", "#E07B39", "#FFD98A", "#FF9E7D", "#E8963C"],
@@ -75,13 +77,16 @@ _DREAMY_GLOW_DARK = {
 }
 # 深色模式的中心内核：深底上的肥皂泡是"边缘亮、中心暗"（薄膜边缘效应），
 # 文字所在的中心必须压暗，否则近白文字对中明度膜色只有 ~2:1。
+# 深色模式的中心内核：目标是"内部发光"，所以用饱和的深色而不是近黑色——
+# 近黑会让泡泡中心变成一个洞（像发光环而不是泡泡）。
+# 文字可读性不靠压黑内核，而靠 --soap-text-scrim 这层文字暗衬（见 style.css）。
 _DREAMY_CORE_DARK = {
-    "开心": "rgba(80,50,8,.55)",
-    "难过": "rgba(12,24,60,.58)",
-    "孤独": "rgba(28,18,58,.58)",
-    "焦虑": "rgba(64,12,26,.58)",
-    "寻求建议": "rgba(6,48,34,.58)",
-    "找人倾诉": "rgba(66,26,8,.58)",
+    "开心": "rgba(122, 74, 12, .52)",
+    "难过": "rgba(30, 60, 142, .55)",
+    "孤独": "rgba(74, 46, 152, .55)",
+    "焦虑": "rgba(122, 28, 60, .55)",
+    "寻求建议": "rgba(12, 94, 68, .52)",
+    "找人倾诉": "rgba(122, 52, 16, .52)",
 }
 
 
@@ -95,14 +100,19 @@ def _bubble_variant(bubble):
     # 同一组色位索引同时作用于亮/暗两套色板：同一 id 永远得到同一组合，刷新不闪烁；
     # 具体取哪套由元素 color-scheme 决定（light-dark() 在内联样式里同样生效）。
     i1, i2, i3, i4 = seed % n, (seed >> 4) % n, (seed >> 8) % n, (seed >> 12) % n
+    # 虹彩偏移：真正的肥皂膜是"光谱"，同一色系的深浅叠多少层都只是一片均匀的雾。
+    # 所以 4 个色位里留两个给已有的虹彩 token（粉/玫/金/薄荷），另两个给情绪色——
+    # 情绪仍是主导色相（内核、辉光、多数色位都是它），色彩编码不丢。
+    irises = ("var(--iris-1)", "var(--iris-2)", "var(--iris-3)", "var(--iris-4)")
+    accent_a, accent_b = irises[(seed >> 16) % 4], irises[(seed >> 20) % 4]
     content_len = len(bubble["content"])
     size = max(120, min(196, 122 + min(content_len, 24) * 3 + (seed % 16)))
     return {
         "size": size,
         "c1": _ld(pal_l[i1], pal_d[i1]),
-        "c2": _ld(pal_l[i2], pal_d[i2]),
+        "c2": accent_a,
         "c3": _ld(pal_l[i3], pal_d[i3]),
-        "c4": _ld(pal_l[i4], pal_d[i4]),
+        "c4": accent_b,
         "glow": _ld(_DREAMY_GLOW_LIGHT.get(emotion, "rgba(190,170,255,.5)"),
                     _DREAMY_GLOW_DARK.get(emotion, "rgba(150,120,255,.32)")),
         # 中心内核：亮色模式下与 glow 同色（亮核）；深色模式下压暗（暗核，保文字对比度）
@@ -228,7 +238,21 @@ def not_found(e):
 # ==================== 泡泡样板（预览）====================
 @app.route("/preview")
 def preview():
-    return render_template("preview.html")
+    """材质试验台：同一颗泡泡在亮/暗两种 color-scheme 下并排放大显示。
+
+    颜色全部走 _bubble_variant()，和生产完全同一条路径——
+    否则试验台上好看、真页面难看，等于白试。
+    """
+    samples = [
+        ("孤独", "最近有点孤独"),
+        ("开心", "今天超开心！"),
+        ("难过", "好想找人说说话"),
+    ]
+    bubbles = []
+    for i, (emotion, content) in enumerate(samples):
+        fake = {"id": f"lab-{i}", "emotion_tag": emotion, "content": content}
+        bubbles.append({"v": _bubble_variant(fake), "emotion": emotion, "content": content})
+    return render_template("preview.html", bubbles=bubbles)
 
 
 # ==================== 认证 ====================

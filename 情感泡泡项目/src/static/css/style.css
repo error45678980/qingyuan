@@ -33,7 +33,6 @@
 
   /* —— 表面（深色下更不透明：透光=发灰）—— */
   --color-surface-card: light-dark(rgba(255, 255, 255, .92), rgba(30, 26, 54, .62));
-  --color-surface-panel: light-dark(rgba(255, 255, 255, .9), rgba(28, 24, 50, .66));
   --color-surface-input: light-dark(rgba(255, 255, 255, .85), rgba(18, 15, 36, .72));
   --color-surface-nav: light-dark(rgba(255, 255, 255, .82), rgba(14, 12, 30, .78));
   --color-surface-soft: light-dark(rgba(255, 255, 255, .7), rgba(38, 33, 64, .55));
@@ -45,11 +44,13 @@
 
   /* —— 页面背景：同色相明度递进，消除"彩虹洗白"。
      深色端走暖调近黑（#12101C），底部留一抹紫雾避免死黑 —— */
-  --color-bg-1: light-dark(#F4F0FF, #12101C);
-  --color-bg-2: light-dark(#EDE6FB, #1A1530);
-  --color-bg-3: light-dark(#E7EEFB, #141B33);
-  --color-bg-4: light-dark(#EFF7EA, #1D1342);
-  --color-bg-radial: light-dark(rgba(124, 58, 237, .10), rgba(124, 58, 237, .22));
+  /* —— 背景：摄影棚布光，不是一条彩虹 ——
+     底色刻意比泡泡暗一档：参考图里的泡泡之所以"发光"，是因为它比背景亮。
+     原来底色接近纯白，苍白通透的泡泡放上去等于隐形。
+     --color-bg-light 是上方光源，--color-bg-vignette 是四角压深。 */
+  --color-bg-base: light-dark(#E7E5F2, #0D0B16);
+  --color-bg-light: light-dark(rgba(255, 255, 255, .95), rgba(104, 80, 200, .20));
+  --color-bg-vignette: light-dark(rgba(92, 82, 138, .20), rgba(0, 0, 0, .62));
 
   /* —— 语义色 —— */
   --color-danger: light-dark(#D63031, #FF6B7A);
@@ -85,7 +86,6 @@
   --font-lg: clamp(15px, .9rem + .16vw, 16px);
   --font-xl: clamp(18px, 1.02rem + .3vw, 20px);
   --font-2xl: clamp(21px, 1.16rem + .4vw, 24px);
-  --font-3xl: clamp(24px, 1.32rem + .5vw, 28px);
   --font-4xl: clamp(28px, 1.5rem + .7vw, 32px);
 
   /* —— 刘海屏/底部手势区安全边距 —— */
@@ -125,14 +125,29 @@
   --soap-faint: light-dark(rgba(255, 255, 255, .04), rgba(255, 255, 255, .02));
   --soap-halo: light-dark(rgba(255, 255, 255, .6), rgba(180, 200, 255, .22));
   --soap-halo-hover: light-dark(rgba(255, 255, 255, .9), rgba(200, 215, 255, .34));
-  --soap-halo-active: light-dark(rgba(255, 255, 255, 1), rgba(220, 230, 255, .46));
   --soap-rim: light-dark(rgba(255, 255, 255, .5), rgba(255, 255, 255, .62));
   --soap-inner-top: light-dark(rgba(255, 255, 255, .4), rgba(255, 255, 255, .14));
-  --soap-inner-active: light-dark(rgba(255, 255, 255, .55), rgba(255, 255, 255, .22));
   --soap-inner-bottom: light-dark(rgba(110, 75, 175, .16), rgba(0, 0, 0, .40));
   --soap-ground: light-dark(rgba(110, 80, 190, .3), rgba(0, 0, 0, .46));
   --soap-emoji-glow: light-dark(rgba(255, 255, 255, .7), rgba(0, 0, 0, .55));
   --soap-glow-default: light-dark(rgba(190, 170, 255, .5), rgba(150, 120, 255, .32));
+
+  /* —— 泡泡材质：把"一个圆"变成"一颗球"的三层光 ——
+     边缘亮环（随角度变化）/ 镜面高光 / 底部焦散（光穿过薄膜后聚集） */
+  --soap-rim-light: light-dark(rgba(255, 255, 255, .95), rgba(238, 244, 255, .9));
+  --soap-rim-shade: light-dark(rgba(255, 255, 255, .06), rgba(255, 255, 255, .12));
+  --soap-spec-core: light-dark(rgba(255, 255, 255, .98), rgba(255, 255, 255, .92));
+  --soap-caustic: light-dark(rgba(255, 255, 255, .78), rgba(190, 215, 255, .5));
+  /* 折射：泡泡弯折背后画面的强度。这一条是"扁平"与"通透"的分水岭，
+     数值刻意保守——过强会像磨砂玻璃，反而失去薄薄一层膜的感觉 */
+  --soap-refract-blur: 2px;
+  --soap-refract-sat: 1.45;
+  --soap-refract-bright: 1.05;
+  /* 膜的边缘加权遮罩：薄膜干涉在掠射角最强，中心最弱。
+     这是图像值，light-dark() 只载颜色，所以整个梯度放这里统一管理，
+     避免在消费处出现 rgba 字面值（体检会算作硬编码）。 */
+  --soap-film-mask: radial-gradient(circle closest-side,
+    rgba(0, 0, 0, .28) 0%, rgba(0, 0, 0, .5) 42%, black 72%);
   /* 文字在深色下必须反转为近白：深字 #3F2A61 在深底上不可读。
      #F2EEFF 对深膜实测 12~13:1（probe_contrast.py --dark 验证） */
   --soap-text-color: light-dark(#3F2A61, #F2EEFF);
@@ -146,10 +161,12 @@
 body {
   font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
   min-height: 100vh;
-  /* 径向聚光打底 + 同色相明度渐变：用明度做纵深，不再用色相做装饰 */
+  /* 摄影棚布光：上方柔光定光源方向，四角暗角把视线收回中间。
+     用明度做纵深，不再用四种色相做装饰——那正是"土"的来源。 */
   background:
-    radial-gradient(ellipse 90% 60% at 50% 0%, var(--color-bg-radial), transparent 70%),
-    linear-gradient(135deg, var(--color-bg-1) 0%, var(--color-bg-2) 30%, var(--color-bg-3) 60%, var(--color-bg-4) 100%);
+    radial-gradient(ellipse 74% 56% at 50% 6%, var(--color-bg-light), transparent 72%),
+    radial-gradient(ellipse 132% 104% at 50% 44%, transparent 40%, var(--color-bg-vignette) 100%),
+    var(--color-bg-base);
   background-attachment: fixed;
   color: var(--color-text);
   line-height: 1.6;
@@ -344,6 +361,10 @@ a { text-decoration: none; color: var(--color-brand); }
     inset 0 12px 26px var(--soap-inner-top);
   margin-left: var(--x, 0px);
   margin-top: var(--y, 0px);
+  /* 折射：泡泡真的弯折背后的画面。这一条最能把"彩色圆片"变成"一层薄薄的膜"——
+     注意它必须在 .soap 自身，才能作用到泡泡后方的页面内容。 */
+  -webkit-backdrop-filter: blur(var(--soap-refract-blur)) saturate(var(--soap-refract-sat)) brightness(var(--soap-refract-bright));
+  backdrop-filter: blur(var(--soap-refract-blur)) saturate(var(--soap-refract-sat)) brightness(var(--soap-refract-bright));
   /* 位移动画已全部交给 GSAP（motion.js）：入场飘落 / hover 歪头缩放 / 按压。
      这里只保留 box-shadow 过渡——CSS 的独立 scale/translate 属性会和
      GSAP 写的 transform 叠乘，造成 hover 双重重缩放，必须删掉。 */
@@ -355,46 +376,78 @@ a { text-decoration: none; color: var(--color-brand); }
     0 0 70px var(--glow, var(--soap-glow-default)),
     inset 0 0 26px var(--soap-rim);
 }
-.soap.selected {
-  scale: 1.08;
-  box-shadow:
-    0 0 30px var(--soap-halo-active),
-    0 0 80px var(--glow, var(--soap-glow-default)),
-    inset 0 0 28px var(--soap-inner-active);
-}
 
 /* 虹彩油膜（旋转的肥皂膜色） */
 .soap-film {
   position: absolute; inset: 0;
   border-radius: var(--radius-full);
-  background: conic-gradient(from 0deg,
-    var(--c1, var(--iris-1)), var(--c2, var(--iris-2)),
-    var(--c3, var(--iris-3)), var(--c4, var(--iris-4)),
-    var(--c1, var(--iris-1)));
-  opacity: .62;
-  filter: blur(5px) saturate(1.7);
+  /* 多层叠加：单一 conic-gradient 画出来是"色轮"，不是薄膜。
+     叠上几块错位的椭圆色斑，才有参考图里那种斑驳流动的干涉色。
+     最底下那层 conic 保留，负责把色相首尾接起来，避免斑块之间露白。 */
+  background:
+    radial-gradient(ellipse 58% 42% at 28% 30%, var(--c1, var(--iris-1)), transparent 68%),
+    radial-gradient(ellipse 46% 58% at 72% 62%, var(--c2, var(--iris-2)), transparent 70%),
+    radial-gradient(ellipse 66% 46% at 44% 82%, var(--c3, var(--iris-3)), transparent 72%),
+    radial-gradient(ellipse 40% 50% at 66% 26%, var(--c4, var(--iris-4)), transparent 70%),
+    conic-gradient(from 40deg,
+      var(--c1, var(--iris-1)), var(--c2, var(--iris-2)),
+      var(--c3, var(--iris-3)), var(--c4, var(--iris-4)),
+      var(--c1, var(--iris-1)));
+  /* 只做轻微柔化：薄膜的色带边界要是"清楚"的，
+     原来 blur(6px) 会把整颗泡糊成一团毛球，失去薄薄一层膜的感觉。 */
+  opacity: .8;
+  filter: blur(2.5px) saturate(1.9);
+  /* 边缘加权：薄膜干涉在掠射角（边缘）最强，中心最弱——这是物理事实，
+     也正好解决"每颗泡都变成彩虹球、情绪色被冲淡"的问题：
+     中心让给情绪色内核，虹彩收在边缘。 */
+  -webkit-mask-image: var(--soap-film-mask);
+  mask-image: var(--soap-film-mask);
   animation: soap-spin var(--dur, 9s) linear infinite;
   pointer-events: none;
 }
-/* 深色下膜色收拢到边缘（薄膜干涉的边缘效应）：中心让位给暗核与文字暗衬。
-   mask 是图像值，light-dark() 只载颜色，所以手动/系统两条路分别写。
-   用 black/transparent 关键字，保持消费处零硬编码色值。 */
-html[data-theme="dark"] .soap-film {
-  -webkit-mask-image: radial-gradient(circle, transparent 46%, black 74%);
-  mask-image: radial-gradient(circle, transparent 46%, black 74%);
-}
-@media (prefers-color-scheme: dark) {
-  html:not([data-theme="light"]) .soap-film {
-    -webkit-mask-image: radial-gradient(circle, transparent 46%, black 74%);
-    mask-image: radial-gradient(circle, transparent 46%, black 74%);
-  }
+/* （深色专属的膜遮罩已移除：边缘加权现在对所有主题统一生效，
+   见 .soap-film 里的 mask-image） */
+
+/* 边缘亮环：亮度随角度变化（左上最亮、右下最弱），这是"球"而不是"圆"的关键。
+   mask 抠出一个细圆环，conic-gradient 决定环上各处的明暗。 */
+.soap-rim {
+  position: absolute; inset: 0;
+  border-radius: var(--radius-full);
+  background: conic-gradient(from 200deg,
+    var(--soap-rim-light) 0deg,
+    var(--soap-rim-shade) 62deg,
+    var(--soap-rim-light) 128deg,
+    var(--soap-rim-light) 196deg,
+    var(--soap-rim-shade) 268deg,
+    var(--soap-rim-light) 360deg);
+  /* 必须写 closest-side：默认的 farthest-corner 会把 100% 定在"中心到对角"，
+     半径是元素半径的 1.41 倍，百分比一超 71% 就跑到圆外，环会被整个遮没。 */
+  -webkit-mask-image: radial-gradient(circle closest-side,
+    transparent 82%, black 89%, black 96%, transparent 100%);
+  mask-image: radial-gradient(circle closest-side,
+    transparent 82%, black 89%, black 96%, transparent 100%);
+  mix-blend-mode: screen;
+  pointer-events: none;
 }
 
-/* 顶侧高光 */
+/* 底部焦散：光穿过滤膜后在内侧下缘聚集出的亮弧 */
+.soap-caustic {
+  position: absolute; inset: 0;
+  border-radius: var(--radius-full);
+  background: radial-gradient(ellipse 58% 26% at 50% 88%,
+    var(--soap-caustic), transparent 74%);
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+/* 顶侧高光：一枚小而锐的镜面点 + 一圈柔和的散射光晕。
+   小而锐的那点才是"玻璃/水膜"的观感来源，只有柔光会显得塑料。 */
 .soap-highlight {
   position: absolute; inset: 5%;
   border-radius: var(--radius-full);
-  background: radial-gradient(circle at 30% 22%, var(--soap-halo-hover), transparent 48%);
+  background:
+    radial-gradient(ellipse 15% 10% at 31% 21%, var(--soap-spec-core), transparent 72%),
+    radial-gradient(ellipse 36% 26% at 28% 25%, var(--soap-halo-hover), transparent 74%);
   pointer-events: none;
 }
 
@@ -450,6 +503,10 @@ html[data-theme="dark"] .soap-film {
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
+  /* 垂直居中：泡泡少时原来全挤在顶部，下面一大片空，看着像布局塌了。
+     参考图留白也很多，但它是对称留白——对称才读作"从容"，单边才读作"空"。 */
+  align-content: center;
+  min-height: calc(100vh - 220px - var(--safe-t) - var(--safe-b));
   gap: var(--space-5) var(--space-4);
   padding: var(--space-8) var(--space-4) calc(var(--space-11) + var(--safe-b));
 }
