@@ -111,8 +111,13 @@ def open_modal(html: str) -> str:
                         'class="modal-overlay open" id="publish-modal"')
 
 
-def chrome_shot(html_path: Path, out: Path, width: int, height: int, scale: int = 2) -> bool:
-    """Chrome 异步写文件，必须轮询等待。"""
+def chrome_shot(target, out: Path, width: int, height: int, scale: int = 2) -> bool:
+    """Chrome 异步写文件，必须轮询等待。
+
+    target 可以是本地 Path，也可以是 http(s) URL —— 后者才会经过真实响应头
+    （验证 CSP / cookie 等必须走 URL）。
+    """
+    uri = str(target) if str(target).startswith("http") else Path(target).as_uri()
     if out.exists():
         out.unlink()
     profile = WORK / f"profile-{uuid.uuid4().hex[:8]}"
@@ -122,7 +127,7 @@ def chrome_shot(html_path: Path, out: Path, width: int, height: int, scale: int 
         f"--user-data-dir={profile}",
         f"--force-device-scale-factor={scale}",
         f"--window-size={width},{height}",
-        f"--screenshot={out}", html_path.as_uri(),
+        f"--screenshot={out}", uri,
     ]
     proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     ok, last, stable = False, -1, 0

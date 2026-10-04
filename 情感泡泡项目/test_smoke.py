@@ -43,6 +43,56 @@ def conv_id_for(bubble_id, helper):
     return row["id"] if row else None
 
 
+def check_security():
+    """安全基线：响应头与会话 cookie 属性。少了这些，回归时没人会发现。
+
+    必须用全新 client：会话 cookie 只在 session 真的被改动时才下发，
+    复用已有会话的 client 拿不到 Set-Cookie。
+    """
+    r = app.test_client().get("/login")
+    h = r.headers
+    assert h.get("X-Content-Type-Options") == "nosniff", "缺少 X-Content-Type-Options"
+    assert h.get("X-Frame-Options") == "DENY", "缺少 X-Frame-Options"
+    csp = h.get("Content-Security-Policy", "")
+    assert "default-src 'self'" in csp, f"CSP 不对：{csp!r}"
+    assert "frame-ancestors 'none'" in csp, "CSP 缺少 frame-ancestors"
+
+    cookies = "; ".join(r.headers.getlist("Set-Cookie"))
+    assert "HttpOnly" in cookies, f"会话 cookie 缺 HttpOnly：{cookies!r}"
+    assert "SameSite=Lax" in cookies, f"会话 cookie 缺 SameSite=Lax：{cookies!r}"
+
+
+def check_logout_csrf(client):
+    """无 CSRF 的登出必须被拒，且不能真把人踢下线。"""
+    r = client.post("/logout")
+    assert r.status_code == 400, f"无 CSRF 登出应 400，实际 {r.status_code}"
+    assert client.get("/").status_code == 200, "被非法的登出请求踢下线了"
+
+
+def check_login_rate_limit():
+    """限流必须按 IP 计数（按用户名会把别人锁死），且成功登录后清零。"""
+    from src import auth
+    auth._LOGIN_FAILURES.clear()
+    c = app.test_client()
+
+    for _ in range(5):
+        r = c.get("/login")
+        c.post("/login", data={"_csrf_token": get_csrf(r), "username": "小明",
+                               "password": "WRONG"})
+    r = c.get("/login")
+    r = c.post("/login", data={"_csrf_token": get_csrf(r), "username": "小明",
+                               "password": "secret123"})
+    assert r.status_code == 429, f"5 次失败后应被限流，实际 {r.status_code}"
+    assert "小明" not in auth._LOGIN_FAILURES, "限流表不应以用户名为键（会把账号锁死）"
+
+    auth._LOGIN_FAILURES.clear()
+    r = c.get("/login")
+    r = c.post("/login", data={"_csrf_token": get_csrf(r), "username": "小明",
+                               "password": "secret123"})
+    assert r.status_code == 302, "清零后应能正常登录"
+    assert not auth._LOGIN_FAILURES, "登录成功后应清空该 IP 的失败记录"
+
+
 def main():
     assert_sqlite_backend()
     client = app.test_client()
@@ -52,6 +102,8 @@ def main():
     assert client.get("/").status_code == 302
     # 2. 登录页
     assert client.get("/login").status_code == 200
+    # 2b. 安全响应头 / cookie 属性
+    check_security()
     # 3. 错邀请码 → 403
     r = client.get("/login"); csrf = get_csrf(r)
     r = client.post("/register", data={"_csrf_token": csrf, "username": "小明",
@@ -64,6 +116,8 @@ def main():
     assert r.status_code == 302
     # 5. 首页
     assert client.get("/").status_code == 200
+    # 5b. 登出必须校验 CSRF
+    check_logout_csrf(client)
     # 6. 发布（JSON）
     r = client.get("/"); csrf = get_csrf(r)
     r = client.post("/publish", data={"_csrf_token": csrf, "content": "最近有点难过",
@@ -111,6 +165,8 @@ def main():
     r = client.get("/"); csrf = get_csrf(r)
     client.post("/logout", data={"_csrf_token": csrf})
     assert client.get("/partial/bubbles").status_code == 401
+    # 17. 登录限流：按 IP 计数 + 成功即清零（放最后，避免污染前面的断言）
+    check_login_rate_limit()
 
     print("=== 全部冒烟测试通过 ===")
 

@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block title %}请求无效 · 情感泡泡{% endblock %}
+{% block content %}
+<div class="center">
+  <div class="empty big">🫧 请求无效，请刷新页面后重试</div>
+  <a class="btn-primary" href="{{ url_for('index') }}">回到泡泡墙</a>
+</div>
+{% endblock %}

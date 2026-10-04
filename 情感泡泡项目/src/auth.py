@@ -10,8 +10,13 @@ from flask import jsonify, redirect, request, session, url_for
 
 from .db import get_db
 
-# 简单的进程内登录限流：{用户名: [时间戳]}
-_LOGIN_ATTEMPTS = {}
+# 进程内登录限流：按「客户端 IP」计数。
+# 刻意不按用户名计数——否则攻击者只要拿别人的用户名反复失败，
+# 就能把受害者锁在门外（账号级 DoS）。按 IP 计数只影响攻击者自己。
+_LOGIN_FAILURES = {}
+_LOGIN_WINDOW = 60          # 60 秒窗口
+_LOGIN_MAX_ATTEMPTS = 5     # 窗口内最多 5 次失败
+_PRUNE_THRESHOLD = 500      # 表过大时顺手回收过期项，避免内存无限增长
 
 
 def get_current_user():
@@ -54,14 +59,38 @@ def validate_csrf():
     return secrets.compare_digest(expected, sent)
 
 
-def is_login_blocked(username):
+def _client_ip():
+    """ProxyFix 已就位，remote_addr 是反代传来的真实客户端 IP。"""
+    return request.remote_addr or "unknown"
+
+
+def _prune(now):
+    for ip in list(_LOGIN_FAILURES):
+        kept = [t for t in _LOGIN_FAILURES[ip] if now - t < _LOGIN_WINDOW]
+        if kept:
+            _LOGIN_FAILURES[ip] = kept
+        else:
+            del _LOGIN_FAILURES[ip]
+
+
+def is_login_blocked():
+    ip = _client_ip()
     now = time.time()
-    window = 60          # 60 秒窗口
-    max_attempts = 5     # 最多 5 次失败
-    attempts = [t for t in _LOGIN_ATTEMPTS.get(username, []) if now - t < window]
-    _LOGIN_ATTEMPTS[username] = attempts
-    return len(attempts) >= max_attempts
+    recent = [t for t in _LOGIN_FAILURES.get(ip, []) if now - t < _LOGIN_WINDOW]
+    if recent:
+        _LOGIN_FAILURES[ip] = recent
+    else:
+        _LOGIN_FAILURES.pop(ip, None)       # 顺手回收，别让空键堆积
+    return len(recent) >= _LOGIN_MAX_ATTEMPTS
 
 
-def record_login_attempt(username):
-    _LOGIN_ATTEMPTS.setdefault(username, []).append(time.time())
+def record_login_failure():
+    now = time.time()
+    if len(_LOGIN_FAILURES) > _PRUNE_THRESHOLD:
+        _prune(now)
+    _LOGIN_FAILURES.setdefault(_client_ip(), []).append(now)
+
+
+def clear_login_failures():
+    """登录成功即清空该 IP 的失败记录：别让用户被自己之前的失误拖累。"""
+    _LOGIN_FAILURES.pop(_client_ip(), None)

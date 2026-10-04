@@ -7,13 +7,14 @@ import hashlib
 import os
 import uuid
 
-from flask import (Flask, flash, jsonify, redirect, render_template, request,
+from flask import (Flask, abort, jsonify, redirect, render_template, request,
                    session, url_for)
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from .auth import (get_current_user, get_csrf_token, is_login_blocked,
-                   login_required, record_login_attempt, validate_csrf)
+from .auth import (clear_login_failures, get_current_user, get_csrf_token,
+                   is_login_blocked, login_required, record_login_failure,
+                   validate_csrf)
 from .db import close_db, get_db, init_database
 
 # ==================== 常量 ====================
@@ -123,6 +124,11 @@ if not app.config["INVITE_CODE"]:
     )
 app.config["DB_PATH"] = _get_server_db_path()
 app.config["DATABASE_URL"] = _load_secret("DATABASE_URL", "")
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+# Secure 由 _harden_session_cookie 按每次请求的协议动态决定：
+# 走 https（Cloudflare 隧道）时打开，本地 http 调试时关闭，否则登录态根本发不出去。
+app.config["SESSION_COOKIE_SECURE"] = False
 # 跑在 Cloudflare Tunnel 等反向代理后面：让 Flask 正确识别 https 与真实客户端 IP。
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
@@ -130,6 +136,28 @@ init_database(app.config["DB_PATH"], app.config.get("DATABASE_URL", ""))
 app.teardown_appcontext(close_db)
 
 app.jinja_env.globals["bubble_style"] = _bubble_variant
+
+# ==================== 安全响应头 ====================
+# 只允许加载本站资源；内联 script/style 是现有模板的写法，暂时放行。
+_CSP = (
+    "default-src 'self'; img-src 'self' data:; font-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
+    "connect-src 'self'; base-uri 'self'; frame-ancestors 'none'"
+)
+
+
+@app.after_request
+def _security_headers(resp):
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("X-Frame-Options", "DENY")
+    resp.headers.setdefault("Referrer-Policy", "same-origin")
+    resp.headers.setdefault("Content-Security-Policy", _CSP)
+    return resp
+
+
+@app.before_request
+def _harden_session_cookie():
+    app.config["SESSION_COOKIE_SECURE"] = request.is_secure
 
 
 @app.context_processor
@@ -141,6 +169,11 @@ def inject_globals():
         "emotion_colors": EMOTION_COLORS,
         "all_emotions": ALL_EMOTIONS,
     }
+
+
+@app.errorhandler(400)
+def bad_request(e):
+    return render_template("400.html"), 400
 
 
 @app.errorhandler(403)
@@ -209,17 +242,18 @@ def login():
     username = (request.form.get("username") or "").strip()
     password = request.form.get("password") or ""
 
-    if is_login_blocked(username):
+    if is_login_blocked():
         return render_template("login.html", active_tab="login",
                                error="尝试次数过多，请 1 分钟后再试"), 429
 
     db = get_db()
     user = db.get_user_by_username(username)
     if user is None or not check_password_hash(user["password_hash"], password):
-        record_login_attempt(username)
+        record_login_failure()
         return render_template("login.html", active_tab="login",
                                error="用户名或密码错误"), 401
 
+    clear_login_failures()
     session.clear()
     session["user_id"] = user["id"]
     return redirect(url_for("index"))
@@ -227,6 +261,9 @@ def login():
 
 @app.route("/logout", methods=["POST"])
 def logout():
+    # 登出也要校验 CSRF：否则第三方页面可以静默把你踢下线。
+    if not validate_csrf():
+        abort(400)
     session.clear()
     return redirect(url_for("login_page"))
 
