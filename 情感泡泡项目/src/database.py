@@ -5,7 +5,12 @@ database.py - 本地数据库模块
 import sqlite3
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _now():
+    """统一用 UTC 时间戳，毫秒精度（浏览器 new Date() 能直接解析）。"""
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
 
 
 class Database:
@@ -17,9 +22,14 @@ class Database:
         self.db_path = db_path
         # 服务器端：每个请求都会新建一个连接（存到 Flask 的 g 里），
         # 因此并发时各请求互不干扰。check_same_thread=False 仅为兼容旧桌面端。
-        self.conn = sqlite3.connect(db_path, check_same_thread=False)
+        self.conn = sqlite3.connect(db_path, check_same_thread=False, timeout=10)
         self.conn.row_factory = sqlite3.Row
         self.cursor = self.conn.cursor()
+        # WAL 让读写可以并发（默认的 rollback journal 会让写阻塞所有读）；
+        # busy_timeout 让并发写在锁冲突时等待而不是直接抛 "database is locked"。
+        self.cursor.execute("PRAGMA journal_mode=WAL")
+        self.cursor.execute("PRAGMA busy_timeout=5000")
+        self.cursor.execute("PRAGMA foreign_keys=ON")
         if init_schema:
             self._create_tables()
 
@@ -120,7 +130,7 @@ class Database:
 
     def save_bubble(self, bubble_id, author, content, emotion_tag, reply_mode, status='active', created_at=None, node_id="", author_id=None):
         if created_at is None:
-            created_at = datetime.now().isoformat()
+            created_at = _now()
         self.cursor.execute("""
             INSERT OR REPLACE INTO bubbles
             (id, author_nickname, author_node_id, content, emotion_tag, reply_mode, status, created_at, author_id)
@@ -148,7 +158,7 @@ class Database:
         return self.cursor.fetchall()
 
     def resolve_bubble(self, bubble_id):
-        now = datetime.now().isoformat()
+        now = _now()
         self.cursor.execute("""
             UPDATE bubbles SET status = 'resolved', resolved_at = ? WHERE id = ?
         """, (now, bubble_id))
@@ -156,7 +166,7 @@ class Database:
 
     def save_bubble_as(self, bubble_id, is_public):
         status = 'saved_public' if is_public else 'saved_private'
-        now = datetime.now().isoformat()
+        now = _now()
         self.cursor.execute("""
             UPDATE bubbles SET status = ?, resolved_at = ? WHERE id = ?
         """, (status, now, bubble_id))
@@ -164,7 +174,7 @@ class Database:
 
     def save_reply(self, bubble_id, replier, content, created_at=None):
         if created_at is None:
-            created_at = datetime.now().isoformat()
+            created_at = _now()
         self.cursor.execute("""
             SELECT 1 FROM replies WHERE bubble_id = ? AND replier_nickname = ? AND content = ? AND created_at = ?
         """, (bubble_id, replier, content, created_at))
@@ -184,7 +194,7 @@ class Database:
 
     def save_chat_message(self, bubble_id, sender, receiver, content, created_at=None, conversation_id=None):
         if created_at is None:
-            created_at = datetime.now().isoformat()
+            created_at = _now()
         self.cursor.execute("""
             SELECT 1 FROM chat_messages
             WHERE bubble_id = ? AND sender_nickname = ? AND receiver_nickname = ?
@@ -217,7 +227,7 @@ class Database:
 
     # ==================== 用户 ====================
     def create_user(self, username, password_hash):
-        created_at = datetime.now().isoformat()
+        created_at = _now()
         self.cursor.execute("""
             INSERT INTO users (username, password_hash, created_at)
             VALUES (?, ?, ?)
@@ -258,7 +268,7 @@ class Database:
         if row:
             return row
         conv_id = str(uuid.uuid4())
-        created_at = datetime.now().isoformat()
+        created_at = _now()
         self.cursor.execute("""
             INSERT INTO conversations (id, bubble_id, author_nickname, helper_nickname, created_at)
             VALUES (?, ?, ?, ?, ?)

@@ -5,7 +5,7 @@
       <div class="msg-name">{{ m['sender_nickname'] }}</div>
     {% endif %}
     <div class="msg-content">{{ m['content'] }}</div>
-    <div class="msg-time">{{ m['created_at'][5:16].replace('T', ' ') }}</div>
+    <div class="msg-time"><time datetime="{{ m['created_at'] }}">{{ m['created_at'][5:16].replace('T', ' ') }}</time></div>
   </div>
 </div>
 {% else %}

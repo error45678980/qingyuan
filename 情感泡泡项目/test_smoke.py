@@ -69,6 +69,17 @@ def check_logout_csrf(client):
     assert client.get("/").status_code == 200, "被非法的登出请求踢下线了"
 
 
+def check_utc_timestamps():
+    """时间戳必须带时区（UTC，毫秒精度）；不带时区会让跨时区显示与排序出错。"""
+    conn = sqlite3.connect(_tmp.name)
+    row = conn.execute("SELECT created_at FROM bubbles LIMIT 1").fetchone()
+    conn.close()
+    assert row, "没有气泡数据可校验"
+    ts = row[0]
+    assert re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}\+00:00$", ts), \
+        f"时间戳不是 UTC 毫秒格式：{ts!r}"
+
+
 def check_login_rate_limit():
     """限流必须按 IP 计数（按用户名会把别人锁死），且成功登录后清零。"""
     from src import auth
@@ -124,6 +135,8 @@ def main():
                                       "emotion_tag": "难过"})
     assert r.status_code == 200
     bubble_id = r.get_json()["bubble_id"]
+    # 6b. 时间戳必须是 UTC + 毫秒
+    check_utc_timestamps()
     # 7. 泡泡墙片段
     assert client.get("/partial/bubbles").status_code == 200
     # 8. 登出

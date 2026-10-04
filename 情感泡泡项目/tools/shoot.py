@@ -19,7 +19,7 @@ import sys
 import tempfile
 import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -56,7 +56,7 @@ def seed():
     uid1 = db.create_user("小明", generate_password_hash("test1234"))
     uid2 = db.create_user("小红", generate_password_hash("test1234"))
 
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     data = [
         (uid1, "小明", "在吗\n晚上一起吃饭", "找人倾诉"),
         (uid2, "小红", "今天下班路上看到一只橘猫，突然就没那么难过了", "开心"),
@@ -78,7 +78,7 @@ def seed():
         bid = str(uuid.uuid4())
         ids.append(bid)
         db.save_bubble(bid, name, content, emo, "dialog",
-                       created_at=(now - timedelta(minutes=i * 7)).isoformat(),
+                       created_at=(now - timedelta(minutes=i * 7)).isoformat(timespec="milliseconds"),
                        author_id=uid)
 
     conv = db.get_or_create_conversation(ids[0], "小明", "小红")

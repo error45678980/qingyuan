@@ -2,16 +2,48 @@
 database_pg.py - PostgreSQL 版本的数据库模块
 跟 database.py 接口完全一致，只是底层换成 psycopg2 连 Neon。
 """
+import threading
+import uuid
+from datetime import datetime, timezone
+
 import psycopg2
 import psycopg2.extras
-import uuid
-from datetime import datetime
+import psycopg2.pool
+
+# 进程内连接池：原来每个请求都要跟 Neon 重新 TCP+TLS 握手一次，代价很高。
+# minconn 不能设 1：psycopg2 的 putconn 只有在「闲置池 < minconn」时才保留连接，
+# 否则直接把连接关掉（已核对 psycopg2/pool.py 第 105 行）。
+_POOLS = {}
+_POOL_LOCK = threading.Lock()
+_POOL_MIN = 2
+_POOL_MAX = 16          # waitress 是 8 线程，留一倍余量
+
+
+def _now():
+    """统一用 UTC 时间戳，毫秒精度（浏览器 new Date() 能直接解析）。"""
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+
+
+def _get_pool(db_url):
+    with _POOL_LOCK:
+        pool = _POOLS.get(db_url)
+        if pool is None or getattr(pool, "closed", False):
+            pool = psycopg2.pool.ThreadedConnectionPool(_POOL_MIN, _POOL_MAX, db_url)
+            _POOLS[db_url] = pool
+        return pool
 
 
 class Database:
     def __init__(self, db_url, init_schema=True):
         self.db_url = db_url
-        self.conn = psycopg2.connect(db_url)
+        self._pool = _get_pool(db_url)
+        try:
+            self.conn = self._pool.getconn()
+            self._pooled = True
+        except psycopg2.pool.PoolError:
+            # 池被占满时兜底：直连一条，别让用户的请求变成 500
+            self.conn = psycopg2.connect(db_url)
+            self._pooled = False
         self.cursor = self.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         if init_schema:
             self._create_tables()
@@ -75,7 +107,7 @@ class Database:
 
     def save_bubble(self, bubble_id, author, content, emotion_tag, reply_mode, status='active', created_at=None, node_id="", author_id=None):
         if created_at is None:
-            created_at = datetime.now().isoformat()
+            created_at = _now()
         self.cursor.execute("""
             INSERT INTO bubbles
             (id, author_nickname, author_node_id, content, emotion_tag, reply_mode, status, created_at, author_id)
@@ -112,7 +144,7 @@ class Database:
         return self.cursor.fetchall()
 
     def resolve_bubble(self, bubble_id):
-        now = datetime.now().isoformat()
+        now = _now()
         self.cursor.execute("""
             UPDATE bubbles SET status = 'resolved', resolved_at = %s WHERE id = %s
         """, (now, bubble_id))
@@ -120,7 +152,7 @@ class Database:
 
     def save_bubble_as(self, bubble_id, is_public):
         status = 'saved_public' if is_public else 'saved_private'
-        now = datetime.now().isoformat()
+        now = _now()
         self.cursor.execute("""
             UPDATE bubbles SET status = %s, resolved_at = %s WHERE id = %s
         """, (status, now, bubble_id))
@@ -128,7 +160,7 @@ class Database:
 
     def save_reply(self, bubble_id, replier, content, created_at=None):
         if created_at is None:
-            created_at = datetime.now().isoformat()
+            created_at = _now()
         self.cursor.execute("""
             SELECT 1 FROM replies WHERE bubble_id = %s AND replier_nickname = %s AND content = %s AND created_at = %s
         """, (bubble_id, replier, content, created_at))
@@ -148,7 +180,7 @@ class Database:
 
     def save_chat_message(self, bubble_id, sender, receiver, content, created_at=None, conversation_id=None):
         if created_at is None:
-            created_at = datetime.now().isoformat()
+            created_at = _now()
         self.cursor.execute("""
             SELECT 1 FROM chat_messages
             WHERE bubble_id = %s AND sender_nickname = %s AND receiver_nickname = %s
@@ -181,7 +213,7 @@ class Database:
 
     # ==================== 用户 ====================
     def create_user(self, username, password_hash):
-        created_at = datetime.now().isoformat()
+        created_at = _now()
         self.cursor.execute("""
             INSERT INTO users (username, password_hash, created_at)
             VALUES (%s, %s, %s) RETURNING id
@@ -223,7 +255,7 @@ class Database:
         if row:
             return row
         conv_id = str(uuid.uuid4())
-        created_at = datetime.now().isoformat()
+        created_at = _now()
         self.cursor.execute("""
             INSERT INTO conversations (id, bubble_id, author_nickname, helper_nickname, created_at)
             VALUES (%s, %s, %s, %s, %s)
@@ -249,4 +281,13 @@ class Database:
         return self.cursor.fetchall()
 
     def close(self):
-        self.conn.close()
+        try:
+            self.cursor.close()
+        except Exception:
+            pass
+        if self._pooled:
+            # putconn 会自动回滚未提交事务、并丢弃已断开的连接（已核对 psycopg2 源码），
+            # 所以这里不需要自己 rollback，也不会把坏连接放回池里。
+            self._pool.putconn(self.conn)
+        else:
+            self.conn.close()

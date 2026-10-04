@@ -49,9 +49,23 @@
     var overlay = document.getElementById('sidebar-overlay');
     var body = document.getElementById('sidebar-body');
 
+    // 时间戳一律以 UTC 存储，这里按访问者所在时区显示。
+    // 局部刷新会替换 innerHTML，所以每次注入后都要重新跑一遍。
+    function localizeTimes(root) {
+      (root || document).querySelectorAll('time[datetime]').forEach(function (el) {
+        var d = new Date(el.getAttribute('datetime'));
+        if (isNaN(d.getTime())) return;      // 老数据格式解析不了就保留原样
+        var p = function (n) { return (n < 10 ? '0' : '') + n; };
+        el.textContent = p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' '
+          + p(d.getHours()) + ':' + p(d.getMinutes());
+      });
+    }
+    localizeTimes(document);
+
     window.openSidebar = function (url) {
       fetch(url).then(function (r) { return r.text(); }).then(function (html) {
         body.innerHTML = html;
+        localizeTimes(body);
         sidebar.classList.add('open');
         overlay.classList.add('open');
         var msgs = document.getElementById('panel-msgs');
@@ -111,6 +125,7 @@
       if (!msgs) return;
       fetch('/partial/chat/' + convId).then(function (r) { return r.text(); }).then(function (html) {
         msgs.innerHTML = html;
+        localizeTimes(msgs);
         msgs.scrollTop = msgs.scrollHeight;
       });
     }
@@ -125,6 +140,7 @@
       var atBottom = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 40;
       fetch('/partial/chat/' + convId).then(function (r) { return r.text(); }).then(function (html) {
         msgs.innerHTML = html;
+        localizeTimes(msgs);
         if (atBottom) msgs.scrollTop = msgs.scrollHeight;
       }).catch(function () {});
     }, 2000);
