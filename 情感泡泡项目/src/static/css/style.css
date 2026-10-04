@@ -98,10 +98,6 @@
   --shadow-card-lift: light-dark(0 24px 60px rgba(124, 58, 237, .2), 0 24px 60px rgba(0, 0, 0, .6));
   --shadow-fab: light-dark(0 8px 24px rgba(124, 58, 237, .35), 0 8px 28px rgba(124, 58, 237, .48));
   --shadow-panel: light-dark(-14px 0 44px rgba(120, 80, 200, .18), -14px 0 44px rgba(0, 0, 0, .58));
-  --shadow-ornament:
-    0 0 46px light-dark(rgba(190, 170, 255, .5), rgba(140, 110, 255, .34)),
-    inset 0 0 0 1.5px light-dark(rgba(255, 255, 255, .8), rgba(200, 215, 255, .45)),
-    inset 0 -16px 32px light-dark(rgba(120, 80, 190, .16), rgba(0, 0, 0, .46));
 
   /* —— 虹彩油膜（深色端降明度提饱和，免得在深底上发荧光）—— */
   --iris-1: light-dark(#ffd6f5, #B85AC8);
@@ -113,10 +109,6 @@
   --color-glass: light-dark(rgba(255, 255, 255, .74), rgba(22, 19, 42, .62));
   --color-glass-border: light-dark(rgba(255, 255, 255, .75), rgba(167, 139, 250, .22));
   --color-glass-sheen: light-dark(rgba(255, 255, 255, .95), rgba(255, 255, 255, .10));
-  /* 装饰泡泡：更锐的顶侧高光，配亮边环才"成球" */
-  --grad-ornament: radial-gradient(circle at 34% 26%,
-      rgba(255, 255, 255, .96), rgba(255, 255, 255, .22) 34%, rgba(255, 255, 255, .05) 58%);
-  /* 装饰泡泡另见 .orn 的多块虹彩斑实现 */
 
   /* —— 泡泡材质（深色下配方反转："亮边 + 暗腔"——亮边环更亮、内阴影换纯黑造体积）—— */
   --soap-gloss: light-dark(rgba(255, 255, 255, .78), rgba(255, 255, 255, .42));
@@ -209,6 +201,14 @@ a { text-decoration: none; color: var(--color-brand); }
 .nav-tab:hover { color: var(--color-brand); }
 .nav-tab.is-active { color: var(--color-brand); border-bottom-color: var(--color-brand); }
 .navbar form { margin: 0; }
+/* 登录页的顶栏：透明悬浮，不带应用栏的底色与分隔线。
+   成熟站点的登录页都这样——让页面本身当主角，导航只是一层轻薄的浮标。 */
+.navbar-ghost {
+  background: transparent;
+  border-bottom-color: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
 
 /* ===== 按钮 ===== */
 .btn-primary {
@@ -278,44 +278,13 @@ a { text-decoration: none; color: var(--color-brand); }
 .flash.error { background: var(--color-danger-bg); color: var(--color-danger); border: 1px solid var(--color-danger-border); }
 
 /* ===== 登录页 ===== */
-/* 全屏场景：卡片浮在泡泡之间，第一屏就交代"这是泡泡的世界" */
+/* 登录页刻意"功能化"：干净的表单 + 透明顶栏右上的登录/注册切换。
+   艺术感不放在这里——它是门口的过道，不是展厅；成熟站点都这么处理。
+   （装饰泡泡已移除，相关 token 与规则一并清理） */
 .auth-scene {
   position: relative;
   min-height: calc(100vh - 160px);
   display: flex; align-items: center; justify-content: center;
-}
-
-/* 装饰泡泡：复用泡泡膜的材质语言，但更轻、更模糊 */
-.orn {
-  position: fixed;
-  border-radius: var(--radius-full);
-  pointer-events: none;
-  z-index: 0;
-  /* 与泡泡墙同一套材质语言：多块错位虹彩斑（不是单一色轮）+ 折射，
-     不再压那层把虹彩洗白的白雾。 */
-  background-image:
-    var(--grad-ornament),
-    radial-gradient(ellipse 58% 42% at 30% 28%, var(--iris-1), transparent 70%),
-    radial-gradient(ellipse 48% 56% at 72% 64%, var(--iris-2), transparent 72%),
-    radial-gradient(ellipse 62% 44% at 44% 80%, var(--iris-3), transparent 72%),
-    radial-gradient(ellipse 42% 52% at 66% 24%, var(--iris-4), transparent 70%),
-    conic-gradient(from 40deg, var(--iris-1), var(--iris-2), var(--iris-3), var(--iris-4), var(--iris-1));
-  filter: saturate(1.55);
-  /* 装饰是背景，不能跟卡片争视线——参考图的美学是"一个主角 + 安静背景" */
-  opacity: .5;
-  box-shadow: var(--shadow-ornament);
-  -webkit-backdrop-filter: blur(2px) saturate(1.35);
-  backdrop-filter: blur(2px) saturate(1.35);
-  animation: orn-float 9s ease-in-out infinite;
-}
-.orn-1 { width: 230px; height: 230px; top: 10%; left: 8%; }
-.orn-2 { width: 128px; height: 128px; top: 64%; left: 15%; animation-delay: 2.2s; }
-.orn-3 { width: 176px; height: 176px; top: 16%; right: 11%; animation-delay: 1.1s; }
-.orn-4 { width: 88px; height: 88px; bottom: 15%; right: 19%; animation-delay: 3.3s; }
-
-@keyframes orn-float {
-  0%, 100% { translate: 0 0; }
-  50% { translate: 0 -24px; }
 }
 
 .auth-card {
@@ -665,7 +634,7 @@ a { text-decoration: none; color: var(--color-brand); }
    motion.js 的 matchMedia 是第一道；这一道保证 JS 失效（离线/CSP/file://）时
    循环动画依然全停——泡泡进出场由 motion.js 在 reduce 时自动放弃执行。 */
 @media (prefers-reduced-motion: reduce) {
-  .soap-film, .soap-ring, .orn {
+  .soap-film, .soap-ring {
     animation: none !important;
   }
   /* 涟漪环留个静态残影：提示"这是活的"但不运动（WCAG 2.3.3 的通行替代） */

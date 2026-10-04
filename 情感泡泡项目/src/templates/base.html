@@ -29,10 +29,11 @@
     </div>
   </nav>
   {% else %}
-  {# 未登录：同一个顶栏，右侧换成小号的「登录 / 注册」文字入口。
-     主流站点的做法——卡片里只留表单本身，切换入口收进导航。
-     顺带让登录页也有了主题切换按钮（此前登录页没有顶栏，等于没有开关）。 #}
-  <nav class="navbar">
+  {# 未登录：同一个顶栏，右侧换成小号的「登录 / 注册」入口。
+     成熟站点的做法是这一条"透明悬浮"——不要应用栏的底色和分隔线，
+     让页面本身当主角，登录页于是干净、功能化。
+     艺术感留给登录之后的页面。 #}
+  <nav class="navbar navbar-ghost">
     <a class="brand" href="{{ url_for('login_page') }}">💭 情感泡泡</a>
     <div class="nav-links nav-auth">
       <button type="button" class="nav-tab is-active" id="nav-tab-login"
