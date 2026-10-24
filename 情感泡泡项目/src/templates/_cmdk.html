@@ -1,0 +1,20 @@
+{# 命令面板：结构静态，内容由 cmdk.js 现取（泡泡索引读 DOM，轮询新增无需重建） #}
+<div class="cmdk" id="cmdk" hidden>
+  <div class="cmdk-scrim" data-cmdk-close></div>
+  <div class="cmdk-panel" role="dialog" aria-modal="true" aria-label="命令面板">
+    <div class="cmdk-input-row">
+      <span class="cmdk-glass" aria-hidden="true">⌕</span>
+      <input class="cmdk-input" id="cmdk-input" type="text"
+             role="combobox" aria-expanded="true" aria-controls="cmdk-list"
+             aria-autocomplete="list" aria-label="搜索泡泡、情绪或命令"
+             placeholder="搜索泡泡、情绪或命令…" autocomplete="off" spellcheck="false">
+      <kbd class="cmdk-kbd">ESC</kbd>
+    </div>
+    <div class="cmdk-list" id="cmdk-list" role="listbox" aria-label="搜索结果"></div>
+    <div class="cmdk-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> 选择</span>
+      <span><kbd>↵</kbd> 打开</span>
+      <span><kbd>esc</kbd> 关闭</span>
+    </div>
+  </div>
+</div>

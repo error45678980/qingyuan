@@ -14,11 +14,11 @@
 
 <button class="fab" type="button" onclick="openPublish()">＋</button>
 
-<div class="modal-overlay" id="publish-modal" onclick="if(event.target===this)closePublish()">
-  <div class="modal-card card">
+<div class="modal-overlay" id="publish-modal" aria-hidden="true" onclick="if(event.target===this)closePublish()">
+  <div class="modal-card card" role="dialog" aria-modal="true" aria-labelledby="publish-title">
     <div class="panel-head">
-      <span class="panel-title">💭 发布心情</span>
-      <button class="panel-close" type="button" onclick="closePublish()">✕</button>
+      <span class="panel-title" id="publish-title">💭 发布心情</span>
+      <button class="panel-close" type="button" onclick="closePublish()" aria-label="关闭">✕</button>
     </div>
     <form id="publish-form" action="{{ url_for('publish') }}">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
@@ -44,45 +44,83 @@
   const wall = document.getElementById('bubble-wall');
   let lastHtml = wall.innerHTML.trim();
   const fullSync = new URLSearchParams(location.search).get('polling') === 'full';
+  let publishTrap = null;
+  let publishLocked = false;
 
   // hover/按压动效（事件委托，一次性绑定）
   if (window.WallMotion) WallMotion.initWall(wall);
 
-  setInterval(async function () {
+  async function refreshWall(force) {
     try {
-      const res = await fetch(partialUrl);
+      const res = await fetch(partialUrl, { cache: 'no-store' });
       if (!res.ok) return;
       const html = (await res.text()).trim();
-      if (html === lastHtml) return;  // 没变化就跳过
+      if (!force && html === lastHtml) return;
       lastHtml = html;
 
       if (fullSync || !window.WallSync) {
         wall.innerHTML = html;        // 回退路径：?polling=full 或脚本未加载
-        return;
+      } else {
+        // keyed diff：复用节点、只给真正的新泡泡播飘落入场，
+        // 消失的泡泡先杀动画再退场——不再只有"第一个泡泡"才有入场动画
+        WallSync.sync(wall, html, {
+          onEnter: function (node) { window.WallMotion && WallMotion.enter(node); },
+          onLeave: function (node) { window.WallMotion ? WallMotion.leave(node) : node.remove(); },
+          onRefresh: function () {}
+        });
       }
-      // keyed diff：复用节点、只给真正的新泡泡播飘落入场，
-      // 消失的泡泡先杀动画再退场——不再只有"第一个泡泡"才有入场动画
-      WallSync.sync(wall, html, {
-        onEnter: function (node) { window.WallMotion && WallMotion.enter(node); },
-        onLeave: function (node) { window.WallMotion ? WallMotion.leave(node) : node.remove(); },
-        onRefresh: function () {}
-      });
+      // 用户拖拽排好的顺序优先于服务端顺序；新泡泡仍排在最前
+      if (window.WallOrder) WallOrder.apply();
     } catch (e) {}
+  }
+
+  setInterval(function () {
+    // 拖拽过程中不要重排 DOM，否则会把用户手里的泡泡抢走
+    if (window.WallOrder && WallOrder.isBusy()) return;
+    refreshWall(false);
   }, 3000);
 
-  // 发布弹窗
+  // 命令面板「恢复默认顺序」：立刻重取一次，而不是等下一轮轮询
+  window.addEventListener('wall:refresh', function () { refreshWall(true); });
+
+  // ===== 发布弹窗 =====
   function openPublish() {
-    document.getElementById('publish-modal').classList.add('open');
+    const modal = document.getElementById('publish-modal');
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+    if (!publishLocked) { publishLocked = true; UI.lockScroll(true); }
+    if (publishTrap) publishTrap.release();
+    publishTrap = UI.trap(modal, {
+      initial: 'textarea',
+      onEscape: function () { closePublish(); }
+    });
   }
   function closePublish() {
-    document.getElementById('publish-modal').classList.remove('open');
+    const modal = document.getElementById('publish-modal');
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+    if (publishLocked) { publishLocked = false; UI.lockScroll(false); }
+    if (publishTrap) { publishTrap.release(); publishTrap = null; }
   }
+
   document.getElementById('publish-form').addEventListener('submit', async function (e) {
     e.preventDefault();
-    const res = await fetch(this.action, { method: 'POST', body: new FormData(this) });
-    if (res.ok) {
-      closePublish();
-      this.reset();
+    const btn = this.querySelector('button[type=submit]');
+    if (btn) btn.disabled = true;
+    try {
+      const res = await fetch(this.action, { method: 'POST', body: new FormData(this) });
+      if (res.ok) {
+        closePublish();
+        this.reset();
+        UI.toast('泡泡已飘上墙', { type: 'success' });
+        refreshWall(true);
+      } else {
+        UI.toast('发布失败，请稍后再试', { type: 'error' });
+      }
+    } catch (err) {
+      UI.toast('网络开小差了，稍后再试', { type: 'error' });
+    } finally {
+      if (btn) btn.disabled = false;
     }
   });
 </script>

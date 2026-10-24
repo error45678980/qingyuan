@@ -104,6 +104,22 @@ def check_login_rate_limit():
     assert not auth._LOGIN_FAILURES, "登录成功后应清空该 IP 的失败记录"
 
 
+def check_insights_api(client):
+    """洞察接口：登录可见、不可缓存、点数与总数一致、时间戳是毫秒整数。"""
+    r = client.get("/api/insights")
+    assert r.status_code == 200, f"/api/insights 应 200，实际 {r.status_code}"
+    assert r.headers.get("Cache-Control") == "no-store", "洞察数据不允许缓存"
+    d = r.get_json()
+    assert set(d["totals"]) == {"active", "conversations", "messages", "resolved"}, d["totals"]
+    assert isinstance(d["points"], list)
+    assert len(d["points"]) == d["totals"]["active"], "点数应与泡泡总数一致"
+    for p in d["points"]:
+        assert isinstance(p["t"], int) and p["t"] > 0, f"时间戳必须是 epoch 毫秒：{p!r}"
+        assert p["e"], "每条泡泡都要带情绪标签"
+    # 未登录必须 401（不能泄露全站聚合数据）
+    assert app.test_client().get("/api/insights").status_code == 401
+
+
 def main():
     assert_sqlite_backend()
     client = app.test_client()
@@ -137,6 +153,8 @@ def main():
     bubble_id = r.get_json()["bubble_id"]
     # 6b. 时间戳必须是 UTC + 毫秒
     check_utc_timestamps()
+    # 6c. 情绪洞察接口
+    check_insights_api(client)
     # 7. 泡泡墙片段
     assert client.get("/partial/bubbles").status_code == 200
     # 8. 登出

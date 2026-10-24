@@ -4,14 +4,32 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}情感泡泡{% endblock %}</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3CradialGradient id='g' cx='35%25' cy='30%25'%3E%3Cstop offset='0' stop-color='%23ffffff'/%3E%3Cstop offset='.45' stop-color='%23c4b5fd'/%3E%3Cstop offset='1' stop-color='%237c3aed'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='50' cy='50' r='42' fill='url(%23g)'/%3E%3Ccircle cx='35' cy='32' r='9' fill='%23ffffff' opacity='.85'/%3E%3C/svg%3E">
   <script>
     // 防闪烁：CSS 加载前恢复用户手动选择的主题；无记录则不设，跟随系统
     try { var _t = localStorage.getItem('eb-theme'); if (_t) document.documentElement.dataset.theme = _t; } catch (e) {}
   </script>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script>
+    // 组件层共享的只读配置：情绪顺序 / 图标 / 强调色。
+    // 颜色是 light-dark() 表达式字符串，写进内联 --accent 后由 CSS 按主题取值，
+    // 因此 JS 不需要判断深浅色。
+    window.EB = {
+      user: {{ (current_user['username'] if current_user else '')|tojson }},
+      emotions: {{ all_emotions|tojson }},
+      icons: {{ emotion_icons|tojson }},
+      colors: {
+        {% for e in all_emotions %}{{ e|tojson }}: {{ emotion_colors[e][1]|tojson }}{{ ',' if not loop.last }}{% endfor %}
+      }
+    };
+  </script>
+  <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
   <script src="{{ url_for('static', filename='js/gsap.min.js') }}"></script>
   <script src="{{ url_for('static', filename='js/wall-sync.js') }}"></script>
   <script src="{{ url_for('static', filename='js/motion.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/cmdk.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/insights.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/wall-drag.js') }}"></script>
 </head>
 <body>
   {% if current_user %}
@@ -20,6 +38,15 @@
     <div class="nav-links">
       <a href="{{ url_for('index') }}">泡泡墙</a>
       <a href="#" data-open-panel="{{ url_for('panel_conversations') }}">我的对话</a>
+      <button type="button" class="nav-search" data-cmdk-open
+              aria-label="搜索泡泡、情绪或命令">
+        <span aria-hidden="true">🔍</span>
+        <span class="nav-search-label">搜索</span>
+        <kbd>⌘K</kbd>
+      </button>
+      <button type="button" class="nav-icon" data-insights-open aria-label="打开情绪洞察">
+        <span class="nav-icon-glyph" aria-hidden="true">📊</span><span class="nav-icon-text">洞察</span>
+      </button>
       <span class="nav-user">👤 {{ current_user['username'] }}</span>
       <button type="button" class="btn-ghost" id="theme-toggle" aria-label="切换深浅色"></button>
       <form method="post" action="{{ url_for('logout') }}">
@@ -61,10 +88,16 @@
 
   {% block scripts %}{% endblock %}
 
-  <aside class="sidebar" id="sidebar">
+  <aside class="sidebar" id="sidebar" role="dialog" aria-modal="true"
+         aria-label="侧栏面板" aria-hidden="true">
     <div class="sidebar-body" id="sidebar-body"></div>
   </aside>
   <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  {% if current_user %}
+    {% include '_cmdk.html' %}
+    {% include '_insights.html' %}
+  {% endif %}
 
   <script>
   (function () {
@@ -89,9 +122,30 @@
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', paintThemeIcon);
     }
 
+    // 快捷键提示按平台显示：Mac 用 ⌘K，其他平台写 Ctrl K
+    var isMac = /Mac|iPhone|iPad/.test(navigator.platform || '');
+    document.querySelectorAll('.nav-search kbd, .cmdk-foot kbd').forEach(function (k) {
+      if (k.textContent.trim() === '⌘K') k.textContent = isMac ? '⌘K' : 'Ctrl K';
+    });
+
+    // ===== 服务端 flash → Toast =====
+    // 模板仍保留 .flash 标记（无 JS 时可见），有 JS 时升级成可自动消失的提示。
+    var flashWrap = document.querySelector('.flash-wrap');
+    if (flashWrap && window.UI) {
+      flashWrap.querySelectorAll('.flash').forEach(function (n) {
+        UI.toast(n.textContent.trim(), {
+          type: n.classList.contains('error') ? 'error' : 'info',
+          duration: 6000
+        });
+      });
+      flashWrap.remove();
+    }
+
     var sidebar = document.getElementById('sidebar');
     var overlay = document.getElementById('sidebar-overlay');
     var body = document.getElementById('sidebar-body');
+    var sidebarTrap = null;
+    var sidebarLocked = false;
 
     // 时间戳一律以 UTC 存储，这里按访问者所在时区显示。
     // 局部刷新会替换 innerHTML，所以每次注入后都要重新跑一遍。
@@ -112,6 +166,14 @@
         localizeTimes(body);
         sidebar.classList.add('open');
         overlay.classList.add('open');
+        sidebar.setAttribute('aria-hidden', 'false');
+        if (!sidebarLocked) { sidebarLocked = true; UI.lockScroll(true); }
+        // 焦点锁进侧栏；ESC 关闭由 trap 接管（和命令面板/洞察面板按后开先关的顺序叠加）
+        if (sidebarTrap) sidebarTrap.release();
+        sidebarTrap = UI.trap(sidebar, {
+          initial: '.panel-close',
+          onEscape: function () { closeSidebar(); }
+        });
         var msgs = document.getElementById('panel-msgs');
         if (msgs) msgs.scrollTop = msgs.scrollHeight;
       });
@@ -119,6 +181,9 @@
     window.closeSidebar = function () {
       sidebar.classList.remove('open');
       overlay.classList.remove('open');
+      sidebar.setAttribute('aria-hidden', 'true');
+      if (sidebarLocked) { sidebarLocked = false; UI.lockScroll(false); }
+      if (sidebarTrap) { sidebarTrap.release(); sidebarTrap = null; }
     };
     overlay.addEventListener('click', closeSidebar);
 

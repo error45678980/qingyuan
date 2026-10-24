@@ -5,7 +5,9 @@ server_app.py - 情感泡泡 网页版服务器
 """
 import hashlib
 import os
+import time
 import uuid
+from datetime import datetime, timezone
 
 from flask import (Flask, abort, jsonify, redirect, render_template, request,
                    session, url_for)
@@ -368,6 +370,61 @@ def partial_chat(conversation_id):
         return jsonify({"error": "forbidden"}), 403
     messages = db.get_messages_for_conversation(conversation_id)
     return render_template("_messages.html", messages=messages, current_user=user)
+
+
+# ==================== 情绪洞察 ====================
+def _epoch_ms(value):
+    """把库里的时间字符串转成 epoch 毫秒。
+
+    历史数据存在两种写法：带微秒的 naive UTC（2026-10-03T20:11:11.560720）
+    和秒级（2026-07-21T16:00:00）。naive 一律按 UTC 解释——
+    库里的约定就是 UTC（见 database.py 的 _now()），不按本地时区猜。
+    解析不了返回 None，由调用方跳过，绝不让一条脏数据把整个面板打挂。
+    """
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        text = str(value).strip()
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        try:
+            dt = datetime.fromisoformat(text)
+        except ValueError:
+            try:
+                dt = datetime.strptime(text[:19], "%Y-%m-%dT%H:%M:%S")
+            except ValueError:
+                return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return int(dt.timestamp() * 1000)
+
+
+@app.route("/api/insights")
+@login_required
+def api_insights():
+    """洞察面板数据：每条泡泡只给 (情绪, 时间戳)，按访问者本地时区分桶。"""
+    data = get_db().get_insight_data()
+    points = []
+    for row in data["bubbles"]:
+        ts = _epoch_ms(row["created_at"])
+        if ts is None:
+            continue
+        points.append({"e": row["emotion_tag"], "t": ts})
+    resp = jsonify({
+        "generated_at": int(time.time() * 1000),
+        "totals": {
+            "active": len(points),
+            "conversations": data["conversations"],
+            "messages": data["messages"],
+            "resolved": data["resolved"],
+        },
+        "points": points,
+    })
+    # 聚合结果随时间变化，且包含全站动态，不允许任何中间层缓存
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 # ==================== 表单处理 ====================

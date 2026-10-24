@@ -1,0 +1,20 @@
+{# 情绪洞察：图表全部由 insights.js 在 .ins-body 内渲染 #}
+<div class="modal-overlay" id="insights-modal" aria-hidden="true">
+  <div class="modal-card card modal-wide" role="dialog" aria-modal="true" aria-labelledby="insights-title">
+    <div class="ins-head">
+      <div>
+        <h2 class="ins-title" id="insights-title">📊 情绪洞察</h2>
+        <p class="ins-sub">看看这段时间，大家都在说什么</p>
+      </div>
+      <div class="ins-tools">
+        <div class="seg" role="group" aria-label="时间范围">
+          <button type="button" data-range="7" aria-pressed="false">7 天</button>
+          <button type="button" data-range="14" aria-pressed="false">14 天</button>
+          <button type="button" data-range="30" aria-pressed="true">30 天</button>
+        </div>
+        <button class="panel-close" type="button" data-insights-close aria-label="关闭洞察面板">✕</button>
+      </div>
+    </div>
+    <div class="ins-body"></div>
+  </div>
+</div>

@@ -280,6 +280,31 @@ class Database:
         """, (conversation_id,))
         return self.cursor.fetchall()
 
+    # ==================== 情绪洞察 ====================
+    def get_insight_data(self):
+        """洞察面板的原料：只取聚合需要的字段，内容本身不出库。
+
+        返回每条公开泡泡的 (情绪, 创建时间)，让前端按访问者本地时区自行分桶——
+        服务端在 UTC 分好桶再发出去，会让东八区用户的"深夜"整体错位 8 小时。
+        """
+        self.cursor.execute("""
+            SELECT emotion_tag, created_at FROM bubbles
+            WHERE status IN ('active', 'saved_public')
+        """)
+        bubbles = [dict(r) for r in self.cursor.fetchall()]
+        self.cursor.execute("SELECT COUNT(*) AS n FROM conversations")
+        conversations = self.cursor.fetchone()["n"]
+        self.cursor.execute("SELECT COUNT(*) AS n FROM chat_messages")
+        messages = self.cursor.fetchone()["n"]
+        self.cursor.execute("SELECT COUNT(*) AS n FROM bubbles WHERE status = 'resolved'")
+        resolved = self.cursor.fetchone()["n"]
+        return {
+            "bubbles": bubbles,
+            "conversations": conversations,
+            "messages": messages,
+            "resolved": resolved,
+        }
+
     def close(self):
         try:
             self.cursor.close()

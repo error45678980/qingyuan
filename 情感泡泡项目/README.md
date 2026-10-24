@@ -37,3 +37,28 @@ python run_web.py
 - ✅ 中央服务器架构，支持多用户发布与交流
 - ✅ 轻量、自包含：**不依赖任何外部 CDN**（全站资源本地自带）
 - ✅ 逐步迭代；每改一次视觉都跑一遍验收工具
+
+---
+
+## 🧩 交互组件
+
+| 组件 | 怎么用 | 代码 |
+|------|--------|------|
+| 命令面板 | `Ctrl / ⌘ + K`，或顶栏「搜索」 | `static/js/cmdk.js` |
+| 情绪洞察 | 顶栏「📊 洞察」 | `static/js/insights.js` + `GET /api/insights` |
+| 拖拽排序 | 直接拖泡泡；键盘 `Alt + 方向键` | `static/js/wall-drag.js` |
+| 快捷菜单 | 右键泡泡，或聚焦后 `Shift + F10` | `static/js/wall-drag.js` |
+| Toast | `UI.toast('已保存', { type: 'success' })` | `static/js/ui.js` |
+
+几条约定，改之前先看一眼：
+
+- **顺序是每个用户自己的**：存在 `localStorage` 的 `eb-wall-order:<用户名>`；
+  轮询刷新后由 `WallOrder.apply()` 重新套用，新发布的泡泡始终排在最前。
+  「恢复默认顺序」在命令面板里。
+- **图表颜色不判断深浅色**：JS 只把 `light-dark()` 表达式写进内联 `--accent`，
+  具体取哪支交给 CSS。新增情绪时只改 `server_app.py` 的 `EMOTION_COLORS`。
+- **所有浮层共用一套焦点管理**：`UI.trap()` 把 Tab 锁在层内，Esc 按「后开先关」
+  逐层退出；关闭后焦点归还给打开它的元素。新加弹窗请复用它，不要自己写 keydown。
+- **服务端只给原料**：`/api/insights` 返回每条泡泡的 `(情绪, epoch 毫秒)`，
+  按访问者本地时区分桶。不要改成服务端分桶——东八区用户的「深夜」会整体错位 8 小时。
+
