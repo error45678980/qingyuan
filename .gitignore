@@ -8,3 +8,7 @@
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# 快捷方式 / 安装包（不入库）
+*.lnk
+*.vsix

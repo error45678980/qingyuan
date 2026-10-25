@@ -36,6 +36,9 @@ config/*.local.py
 config/config.json
 .env
 
+# 截图工具的中间产物（含本机绝对路径，不入库）
+tools/shots/_html/
+
 # 编辑器 / 系统
 .idea/
 .vscode/

@@ -42,7 +42,7 @@ python src/main.py
 在客户端机器上把服务器地址指向运行服务器的那台电脑：
 
 ```cmd
-set QINGYUAN_SERVER_URL=http://192.168.1.10:5000
+set QINGYUAN_SERVER_URL=http://<服务器IP>:5000
 python src/main.py
 ```
 
