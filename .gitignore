@@ -12,3 +12,6 @@ desktop.ini
 # 快捷方式 / 安装包（不入库）
 *.lnk
 *.vsix
+
+# 本地隐私处理记录（不入库）
+GitHub隐私清除申请.md
