@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 日志
+*.log
+app_log.txt
+server_log.txt
+client_debug.log
+server_debug.log
+tunnel.log
+tunnel.err.log
+server_web.log
+server_web.err.log
+
+# 数据库（运行期数据，不入库）
+*.db
+*.db-wal
+*.db-shm
+server_data/*.db
+server_data/*.db-wal
+server_data/*.db-shm
+server_data/backup/
+
+# 但迁移夹具必须入库（架构文档 §3.3.2）
+!tests/fixtures/
+!tests/fixtures/*.db
+
+# 密钥与本地配置（含历史 Web 分支遗留的真实连接串，务必轮换）
+config/secrets.local.py
+config/*.local.py
+config/config.json
+.env
+
+# 编辑器 / 系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,160 @@
+%% 情感泡泡 v2.0 — 关键调用序列（对应 03_架构设计.md §4/§6/§7/§8）
+%% 渲染：mermaid-cli / VS Code Markdown Preview Mermaid
+
+sequenceDiagram
+    autonumber
+    participant U as 用户
+    participant AW as AppWindow(UI线程)
+    participant WP as WallPage(UI线程)
+    participant SM as SyncManager(NetWorker线程)
+    participant API as ApiClient
+    participant SS as ServerStore
+    participant SA as ServerAuth
+    participant PM as permissions.evaluate
+    participant R as Repo(SQLite WAL)
+
+    %% ========== 1. 启动与迁移 ==========
+    rect rgb(240, 245, 255)
+    Note over AW,R: 阶段 1 — 启动：备份 → 迁移 → 起线程 → 首屏
+    U->>AW: python src/main.py
+    AW->>R: Migrator.run()
+    R->>R: copy db -> ~/.Qingyuan/backup/db_YYYYmmdd_HHMMSS.db
+    R->>R: BEGIN IMMEDIATE / 建 *_v2 / 按列名 INSERT..SELECT
+    R->>R: 行数断言 + (id,content,emotion_tag,...) EXCEPT 双向断言
+    R->>R: RENAME 换表 / 建索引 / foreign_key_check / COMMIT
+    R-->>AW: MigrationResult(6 bubbles, backup_path)
+    AW->>SM: moveToThread + started.connect(start)
+    SM->>R: Outbox.reset_stale_syncing()
+    SM->>API: GET /api/v2/health (timeout=3s)
+    alt 服务器可达
+        API-->>SM: 200 {status:ok}
+        SM-->>AW: online_changed(True)
+        SM->>API: POST /api/v2/session {client_id, nickname}
+        API-->>SM: 200 {token}
+        SM->>R: set_meta("token", token)
+        SM->>API: GET /api/v2/bubbles?limit=50
+        API-->>SM: 200 {items,total,has_more,next_cursor}
+        SM->>R: upsert_bubble() × N（单事务）
+    else 服务器不可达
+        API-->>SM: NetworkError
+        SM-->>AW: online_changed(False)
+        SM->>R: list_public(limit=50)  ← 读本地缓存
+    end
+    SM-->>WP: bubbles_pulled(items, total, has_more)
+    WP->>WP: apply_bubbles() 按 id diff 复用 widget
+    WP-->>U: 3 秒内可交互（无网络阻塞）
+    end
+
+    %% ========== 2. 发布（离线入队） ==========
+    rect rgb(255, 248, 240)
+    Note over U,R: 阶段 2 — 离线发布：本地立即可见 + 入队
+    U->>WP: 点 ＋ 发布
+    WP->>AW: request_publish()
+    AW->>AW: 打开 PublishPage（草稿保留）
+    U->>AW: 提交(content, emotion_tag, reply_mode)
+    AW->>SM: request_publish(...)  [信号投递，立即返回]
+    SM->>SM: op_id = uuid4()
+    SM->>R: upsert_bubble(sync_state='pending') + outbox.enqueue('publish')
+    SM-->>AW: outbox_changed(1)
+    SM-->>WP: bubble_updated(bubble)
+    WP->>WP: prepend_bubble() → 卡片带 ⏳ 待同步
+    SM->>API: POST /api/v2/bubbles {id, op_id, content, ...}
+    alt 网络失败
+        API-->>SM: NetworkError
+        SM->>R: outbox.mark_retry(error, next=+5s)
+        SM-->>AW: online_changed(False)
+    else 成功
+        API-->>SM: 201 BubbleDTO
+        SM->>R: upsert_bubble(version=1, sync_state='synced') + outbox.mark_done()
+        SM-->>WP: bubble_updated(bubble)  ← ⏳ 角标消失
+    end
+    end
+
+    %% ========== 3. 网络恢复 → 重放 ==========
+    rect rgb(240, 255, 240)
+    Note over SM,R: 阶段 3 — 网络恢复自动补同步（R-04）
+    SM->>SM: _tick_outbox()（10s）或 online_changed(True) 立即触发
+    SM->>R: outbox.next_batch(now, limit=20)  ORDER BY id ASC
+    R-->>SM: [OutboxItem(publish, attempts=1)]
+    SM->>R: outbox.mark_syncing(op_id)
+    SM->>API: POST /api/v2/bubbles {op_id}
+    API-->>SM: 200（op_log 命中，幂等重放首次结果）
+    SM->>R: outbox.mark_done(op_id) + set_bubble_sync_state('synced')
+    SM-->>WP: outbox_changed(0) / bubble_updated()
+    Note right of SM: 重复触发不产生重复记录（op_id 幂等）
+    end
+
+    %% ========== 4. 单次回复 409 ==========
+    rect rgb(255, 240, 245)
+    Note over U,SS: 阶段 4 — 单次回复规则（R-05，服务端强制）
+    U->>AW: 点泡泡卡片
+    AW->>R: get_bubble(id) + list_replies(id)  ← 本地缓存，<300ms
+    R-->>AW: Bubble / [Reply]
+    AW->>SM: request_detail(id)
+    AW->>AW: DetailDrawer.render(缓存数据)  ← 先渲染
+    SM->>API: GET /api/v2/bubbles/<id>?with=replies,chats
+    API->>SA: resolve_identity(X-Client-Id)
+    SA->>SS: SELECT client_id, nickname FROM clients WHERE client_id=?
+    SA-->>API: Identity
+    API->>SS: get_bubble(id)
+    SS-->>API: Bubble
+    API->>PM: evaluate(bubble, me, my_reply_count, has_chatted)
+    PM-->>API: Permissions(can_reply=True)
+    API-->>SM: 200 BubbleDTO + replies + my_reply=null
+    SM->>R: upsert_bubble/upsert_reply
+    SM-->>AW: bubble_updated / replies_updated
+    AW->>AW: DetailDrawer.render(最新)
+
+    U->>AW: 输入回复并发送
+    AW->>SM: request_reply(bubble_id, content)
+    SM->>API: POST /api/v2/bubbles/<id>/reply {op_id, content}
+    API->>SS: count_replies(bubble_id, client_id)
+    SS-->>API: 1
+    API-->>SM: 409 {code:"conflict", message:"这个泡泡只能回复一次哦～"}
+    SM->>R: outbox.mark_failed(op_id) + 删除本地乐观回复
+    SM-->>AW: action_failed("reply", msg, 409)
+    AW->>AW: 输入框内容不清空 + 中文提示
+    end
+
+    %% ========== 5. 私聊隔离 403 ==========
+    rect rgb(245, 245, 255)
+    Note over U,SS: 阶段 5 — 私聊隔离（R-06）
+    U->>AW: 第三方 C 打开对话
+    AW->>SM: request_chat(bubble_id, peer)
+    SM->>API: GET /api/v2/bubbles/<id>/chat?peer=<author>
+    API->>SA: resolve_identity
+    API->>SS: list_chats(id, client_id=C, is_author=False)
+    SS-->>API: []（无 C 参与的任何消息）
+    API->>PM: evaluate(bubble, C, ...) → is_participant=False
+    PM-->>API: Permissions(can_chat=False, status_code=403)
+    API-->>SM: 403 {code:"forbidden"}
+    SM-->>AW: action_failed("chat", "你无权查看这个对话", 403)
+    AW->>AW: ChatDrawer 显示"你无权查看这个对话" + 返回
+    end
+
+    %% ========== 6. 解决泡泡（爆破动画） ==========
+    rect rgb(255, 245, 235)
+    Note over U,WP: 阶段 6 — 已解决：爆破动画 ≥600ms 后才移除（R-08）
+    U->>AW: 作者点"🎈 已解决"并确认
+    AW->>SM: request_resolve(bubble_id)
+    SM->>R: mark_bubble_status('resolved', version+1) + outbox.enqueue('resolve', base_version)
+    SM-->>AW: bubble_updated(bubble status=resolved)
+    AW->>WP: remove_bubble_animated(id)
+    WP->>WP: BubbleView.start_burst()  ← QPropertyAnimation 700ms
+    WP-->>AW: burst_finished(id)  ← 动画结束才真正 detach
+    WP->>WP: Toast.show_text("泡泡已炸掉 💥")
+    SM->>API: POST /api/v2/bubbles/<id>/resolve {op_id, base_version}
+    API->>PM: evaluate(bubble, me) → is_owner=True
+    PM-->>API: can_manage=True（作者无条件覆盖，Q-4）
+    API->>SS: update_bubble_status('resolved', version+1)
+    API-->>SM: 200 BubbleDTO
+    end
+
+    %% ========== 7. 关闭 ==========
+    rect rgb(245, 245, 245)
+    Note over AW,R: 阶段 7 — 退出清理
+    U->>AW: 关闭窗口
+    AW->>SM: stop()（停 2 个定时器 + 发哨兵）
+    SM->>R: 各线程 conn.close()
+    AW->>AW: closeEvent accept
+    end

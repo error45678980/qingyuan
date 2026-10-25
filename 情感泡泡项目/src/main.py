@@ -1,204 +1,111 @@
-﻿"""
-情感泡泡 - 主程序
-双击启动即可进入梦幻情感世界
+"""情缘 · 客户端入口（`python src/main.py`）。
+
+启动顺序（架构 §3.3 / §6.5）：
+    1. 装日志与异常钩子；
+    2. 读/建 `~/.Qingyuan/config.json`（`client_id` 持久化，Q-1）；
+    3. **迁移客户端库**（首次启动把旧库无损升级到 v2，迁移前自动备份）；
+    4. 建 `Repo` / `ApiClient`，交给 `AppWindow`（同步线程在登录后才启动）；
+    5. 进入 QApplication 事件循环。
+
+任何一步失败都写日志 + 弹中文提示，不静默退出。
 """
-import sys
+
+from __future__ import annotations
+
 import os
-import traceback
+import sys
 
-# 确保能找到项目模块
-_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _project_root not in sys.path:
-    sys.path.insert(0, _project_root)
+# 确保能找到项目模块（双击运行 / 从任意 cwd 运行都成立）
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
 
-from PyQt5.QtWidgets import QApplication, QMainWindow, QDesktopWidget, QWidget, QMessageBox
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont
+import logging  # noqa: E402 - 必须在 sys.path 调整之后
 
-LOG_DIR = os.path.join(os.path.expanduser("~"), ".EmotionBubble")
-LOG_PATH = os.path.join(LOG_DIR, "app.log")
-os.makedirs(LOG_DIR, exist_ok=True)
+from PyQt5.QtWidgets import QApplication, QMessageBox  # noqa: E402
+
+logger = logging.getLogger("ui.main")
+
+#: 启动失败提示（中文，C-4）。
+TEXTS: dict[str, str] = {
+    "migration_title": "数据库升级失败",
+    "migration_body": "客户端数据库升级没有成功，程序已停止以免破坏数据。\n\n{detail}\n\n日志：{log}",
+    "startup_title": "启动失败",
+    "startup_body": "程序启动失败：{detail}\n\n日志：{log}",
+}
 
 
-def _write_log(message):
-    with open(LOG_PATH, "a", encoding="utf-8") as fh:
-        fh.write(message + "\n")
-
-
-def _show_error_dialog(parent, title, message):
+def _show_error(title: str, body: str) -> None:
+    """弹中文错误框（无 GUI 环境下退化为日志）。"""
     try:
-        QMessageBox.critical(parent, title, message)
-    except Exception:
-        print(message)
+        QMessageBox.critical(None, title, body)
+    except RuntimeError:
+        logger.error("%s: %s", title, body)
 
 
-def _install_exception_hook():
-    def _hook(exc_type, exc, tb):
-        detail = ''.join(traceback.format_exception(exc_type, exc, tb))
-        _write_log(detail)
-        print(detail, file=sys.stderr)
-        app = QApplication.instance()
-        if app is not None:
-            top_windows = [w for w in QApplication.topLevelWidgets() if hasattr(w, 'isVisible') and w.isVisible()]
-            parent = top_windows[0] if top_windows else None
-            _show_error_dialog(parent, "程序发生错误", f"抱歉，程序遇到了异常，已记录到：{LOG_PATH}\n\n{exc}")
-    sys.excepthook = _hook
+def _prepare_core():
+    """初始化日志 / 配置 / 数据库迁移，返回 `(config, repo, api)`。"""
+    from src.core.api import ApiClient
+    from src.core.config import backup_dir, db_path, load_or_create, log_path
+    from src.core.logging_setup import install_excepthook, setup_logging
+    from src.core.migrations import ensure_client_schema
+    from src.core.repo import Repo
 
-_install_exception_hook()
+    setup_logging(log_path(), console=False)
+    install_excepthook(logging.getLogger("app"))
 
-from src.database import Database
-from src.network import CentralServerNetwork
-
-# 全局网络实例
-_network = None
-
-
-class AppWindow(QMainWindow):
-    """主窗口 - 直接切换中央部件来管理页面"""
-
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("情感泡泡 ??")
-        self.setMinimumSize(1000, 700)
-        self.resize(1100, 750)
-
-        screen = QDesktopWidget().screenGeometry()
-        self.move((screen.width() - self.width()) // 2,
-                  (screen.height() - self.height()) // 2)
-
-        self.db = Database()
-        self.current_nickname = ""
-
-        # 页面引用
-        self.login_page = None
-        self.main_page = None
-        self.publish_page = None
-        self.detail_page = None
-        self.chat_page = None
-
-        self._show_login()
-
-    def _switch_to(self, new_widget):
-        old = self.centralWidget()
-        self.setCentralWidget(new_widget)
-        if old and old is not new_widget:
-            old.deleteLater()
-
-    # === 登录 ===
-    def _show_login(self):
-        from src.ui.login_page import LoginPage
-        self.login_page = LoginPage()
-        self.login_page.login_success.connect(self._on_login)
-        self._switch_to(self.login_page)
-
-    def _on_login(self, nickname):
-        self.current_nickname = nickname
-        global _network
-        try:
-            _network = CentralServerNetwork(nickname)
-        except Exception as e:
-            _write_log(f"[网络] 初始化失败: {e}\n{traceback.format_exc()}")
-            _network = None
-        self.login_page = None
-        try:
-            self._show_main()
-        except Exception as e:
-            _write_log(f"[登录后进入主界面失败] {e}\n{traceback.format_exc()}")
-            _show_error_dialog(self, "进入主界面失败", f"进入主界面失败：{e}\n\n请查看日志：{LOG_PATH}")
-            self._show_login()
-
-    def _on_remote_bubble(self, data):
-        try:
-            self.db.save_bubble(data["id"], data["author"], data["content"],
-                                data["emotion"], data["reply_mode"])
-            if self.main_page:
-                self.main_page.refresh()
-        except:
-            pass
-
-    def _on_remote_resolved(self, data):
-        try:
-            self.db.resolve_bubble(data["bubble_id"])
-            if self.main_page:
-                self.main_page.refresh()
-        except:
-            pass
-
-    # === 主页面 ===
-    def _show_main(self):
-        from src.ui.main_window import MainWindow as BubbleWall
-        self.main_page = BubbleWall(self.db, self.current_nickname, _network)
-        self.main_page.show_publish.connect(self._show_publish)
-        self.main_page.show_bubble_detail.connect(self._show_detail)
-        self.main_page.switch_user.connect(self._switch_user)
-        self._switch_to(self.main_page)
-
-    # === 发布 ===
-    def _show_publish(self):
-        from src.ui.publish_page import PublishPage
-        self.publish_page = PublishPage(self.current_nickname, self.db, _network)
-        self.publish_page.published.connect(self._on_published)
-        self.publish_page.cancelled.connect(self._back_main)
-        self._switch_to(self.publish_page)
-
-    def _on_published(self, *args):
-        self.publish_page = None
-        self._back_main()
-
-    # === 详情 ===
-    def _show_detail(self, bubble_id):
-        from src.ui.bubble_detail import BubbleDetailPage
-        self.detail_page = BubbleDetailPage(self.db, self.current_nickname, bubble_id, _network)
-        self.detail_page.bubble_resolved.connect(self._on_detail_done)
-        self.detail_page.bubble_saved.connect(self._on_detail_done)
-        self.detail_page.replied.connect(self._back_main)
-        self.detail_page.start_chat.connect(self._show_chat)
-        self.detail_page.go_back.connect(self._back_main)
-        self._switch_to(self.detail_page)
-
-    def _on_detail_done(self, *args):
-        self.detail_page = None
-        self._back_main()
-
-    def _show_chat(self, bubble_id, replier):
-        from src.ui.chat_window import ChatWindow
-        self.chat_page = ChatWindow(self.db, self.current_nickname, bubble_id, _network)
-        self.chat_page.chat_ended.connect(self._back_main)
-        self.chat_page.message_sent.connect(lambda *a: None)
-        self._switch_to(self.chat_page)
-
-    # === 辅助 ===
-    def _back_main(self):
-        self.publish_page = None
-        self.detail_page = None
-        self.chat_page = None
-        if self.main_page:
-            self._switch_to(self.main_page)
-            self.main_page.refresh()
-        else:
-            self._show_main()
-
-    def _switch_user(self):
-        self.current_nickname = ""
-        global _network
-        _network = None
-        self.main_page = None
-        self._show_login()
+    config = load_or_create()
+    result = ensure_client_schema(db_path(), backup_dir())
+    logger.info(
+        "客户端库就绪 outcome=%s schema_version=%s before=%s after=%s backup=%s",
+        result.outcome,
+        result.schema_version,
+        dict(result.before),
+        dict(result.after),
+        result.backup_path or "-",
+    )
+    repo = Repo(db_path())
+    api = ApiClient(
+        config.server_url,
+        client_id=config.client_id,
+        token=config.token,
+    )
+    return config, repo, api
 
 
-def main():
+def main() -> int:
+    """应用入口。"""
+    from src.core.config import log_path
+    from src.core.errors import MigrationError
+
+    app = QApplication(sys.argv)
+    app.setApplicationName("情缘")
+
     try:
-        app = QApplication(sys.argv)
-        app.setFont(QFont("Microsoft YaHei", 10))
+        config, repo, api = _prepare_core()
+    except MigrationError as exc:
+        logger.exception("数据库迁移失败")
+        _show_error(
+            TEXTS["migration_title"],
+            TEXTS["migration_body"].format(detail=str(exc), log=log_path()),
+        )
+        return 2
+    except Exception as exc:  # 启动期任何异常都要有中文提示 + 日志
+        logger.exception("启动准备失败")
+        _show_error(
+            TEXTS["startup_title"],
+            TEXTS["startup_body"].format(detail=str(exc), log=log_path()),
+        )
+        return 1
 
-        window = AppWindow()
-        window.show()
-        sys.exit(app.exec_())
-    except Exception as e:
-        _write_log(f"[main] 启动失败: {e}\n{traceback.format_exc()}")
-        _show_error_dialog(None, "启动失败", f"程序启动失败：{e}\n\n请查看日志：{LOG_PATH}")
-        raise
+    from src.ui import theme
+    from src.ui.app_window import AppWindow
+
+    app.setFont(theme.font(10))
+    window = AppWindow(config, repo, api)
+    window.show()
+    return int(app.exec_())
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -1,0 +1,411 @@
+%% 情感泡泡 v2.0 — 类图（对应 03_架构设计.md §2/§6/§8）
+%% 渲染：mermaid-cli / VS Code Markdown Preview Mermaid
+
+classDiagram
+    direction LR
+
+    %% ===== 数据模型（具名结构，禁止位置下标） =====
+    class Bubble {
+        +str id
+        +str author_nickname
+        +str author_client_id
+        +str content
+        +str emotion_tag
+        +str reply_mode
+        +str status
+        +int version
+        +str created_at
+        +str? resolved_at
+        +str? saved_at
+        +str sync_state
+        +int reply_count
+        +int chat_count
+        +is_public_visible() bool
+        +content_preview() str
+        +display_time() str
+    }
+
+    class Reply {
+        +int id
+        +str bubble_id
+        +str replier_nickname
+        +str replier_client_id
+        +str content
+        +str created_at
+        +str op_id
+        +str sync_state
+    }
+
+    class ChatMessage {
+        +int id
+        +str bubble_id
+        +str sender_nickname
+        +str sender_client_id
+        +str receiver_nickname
+        +str? receiver_client_id
+        +str content
+        +str created_at
+        +str op_id
+        +str sync_state
+    }
+
+    class OutboxItem {
+        +int id
+        +str op_id
+        +str op_type
+        +str bubble_id
+        +str payload
+        +int base_version
+        +str state
+        +int attempts
+        +str next_attempt_at
+        +str? last_error
+        +str created_at
+        +str updated_at
+    }
+
+    class ModelsModule {
+        <<module>>
+        +row_to_bubble(row) Bubble
+        +row_to_reply(row) Reply
+        +row_to_chat(row) ChatMessage
+        +row_to_outbox(row) OutboxItem
+        +bubble_to_dto(b, is_owner, can_reply, legacy_owner) dict
+        +bubble_from_dto(dto) Bubble
+        +encode_cursor(created_at, id) str
+        +decode_cursor(cursor) tuple
+    }
+
+    ModelsModule ..> Bubble : 构造
+    ModelsModule ..> Reply : 构造
+    ModelsModule ..> ChatMessage : 构造
+    ModelsModule ..> OutboxItem : 构造
+    Bubble "1" o-- "*" Reply : bubble_id
+    Bubble "1" o-- "*" ChatMessage : bubble_id
+
+    %% ===== 权限（服务端与客户端共用的唯一实现） =====
+    class Identity {
+        +str client_id
+        +str nickname
+    }
+
+    class Permissions {
+        +bool is_owner
+        +bool is_replier
+        +bool is_participant
+        +bool can_read
+        +bool can_reply
+        +bool can_chat
+        +bool can_manage
+        +bool can_read_all_chats
+        +str deny_reason
+        +int status_code
+    }
+
+    class PermissionsModule {
+        <<module>>
+        +evaluate(bubble, me, my_reply_count, has_chatted, legacy_owner) Permissions
+    }
+
+    PermissionsModule ..> Permissions : 返回
+    PermissionsModule ..> Identity : 入参
+    PermissionsModule ..> Bubble : 入参
+
+    %% ===== 客户端数据层 =====
+    class Repo {
+        +str db_path
+        +_conn() Connection
+        +_tx() contextmanager
+        +list_public(emotion, q, limit, offset) list~Bubble~
+        +get_bubble(id) Bubble
+        +list_replies(id) list~Reply~
+        +list_chats(id, peer) list~ChatMessage~
+        +list_mine(group, client_id, nickname) list~Bubble~
+        +count_by_group(client_id, nickname) dict
+        +my_reply_count(id, client_id, nickname) int
+        +pending_count() int
+        +upsert_bubble(b) None
+        +upsert_reply(r) None
+        +upsert_chat(m) None
+        +mark_bubble_status(id, status, version, at) None
+        +set_bubble_sync_state(id, state) None
+        +get_meta(key, default) str
+        +set_meta(key, value) None
+    }
+
+    class Migrator {
+        +int SCHEMA_VERSION
+        +run() MigrationResult
+        -_backup() str
+        -_create_v2_tables() None
+        -_copy_by_column_name() None
+        -_assert_counts(before) None
+        -_assert_content_except() None
+        -_swap_tables() None
+        -_create_indexes() None
+    }
+
+    class Outbox {
+        +enqueue(op_type, bubble_id, payload, base_version) OutboxItem
+        +next_batch(now, limit) list~OutboxItem~
+        +mark_syncing(op_id) None
+        +mark_done(op_id) None
+        +mark_retry(op_id, error, now) None
+        +mark_failed(op_id, error) None
+        +reset_stale_syncing() int
+        +pending_count() int
+    }
+
+    class ApiClient {
+        +str base_url
+        +str client_id
+        +str token
+        +int timeout
+        +health() dict
+        +session(nickname) dict
+        +list_bubbles(limit, cursor, emotion, q, since) dict
+        +create_bubble(payload) dict
+        +get_bubble(id) dict
+        +reply(id, op_id, content) dict
+        +list_chats(id, peer) dict
+        +send_chat(id, op_id, receiver, content) dict
+        +resolve(id, op_id, base_version) dict
+        +save(id, op_id, is_public, base_version) dict
+        +mine(group, limit, cursor) dict
+    }
+
+    class SyncManager {
+        <<QObject, 运行于 NetWorker 线程>>
+        +Signal online_changed(bool)
+        +Signal bubbles_pulled(list, int, bool)
+        +Signal bubble_updated(Bubble)
+        +Signal replies_updated(str, list)
+        +Signal chats_updated(str, list)
+        +Signal outbox_changed(int)
+        +Signal action_failed(str, str, int)
+        +Signal action_ok(str, object)
+        +start() None
+        +stop() None
+        +request_pull(emotion, q, limit, cursor) None
+        +request_publish(content, emotion_tag, reply_mode) None
+        +request_reply(bubble_id, content) None
+        +request_chat(bubble_id, receiver, content) None
+        +request_resolve(bubble_id) None
+        +request_save(bubble_id, is_public) None
+        +request_detail(bubble_id) None
+        -_tick_pull() None
+        -_tick_outbox() None
+        -_enqueue(op_type, payload, bubble_id, base_version) str
+        -_flush_one(item) str
+    }
+
+    Repo ..> Migrator : 启动时执行
+    Repo ..> Bubble : 返回
+    Repo ..> Reply : 返回
+    Repo ..> ChatMessage : 返回
+    Outbox ..> OutboxItem : 返回
+    SyncManager --> Repo : 唯一写入者
+    SyncManager --> Outbox : 读写队列
+    SyncManager --> ApiClient : 唯一 HTTP 出口
+    SyncManager ..> PermissionsModule : 离线兜底判定
+
+    %% ===== 服务端 =====
+    class ServerStore {
+        +int SCHEMA_VERSION
+        +run_migration() None
+        +get_client(client_id) Row
+        +upsert_client(client_id, nickname, token) None
+        +get_op_log(op_id) str
+        +put_op_log(op_id, client_id, op_type, result_json) None
+        +get_bubble(id) Bubble
+        +list_bubbles(limit, cursor, emotion, q, since) tuple
+        +count_bubbles(emotion, q, since) int
+        +insert_bubble(b) None
+        +update_bubble_status(id, status, version, at) None
+        +count_replies(id, client_id, nickname) int
+        +list_replies(id) list~Reply~
+        +insert_reply(r) None
+        +list_chats(id, client_id, is_author) list~ChatMessage~
+        +insert_chat(m) None
+        +list_mine(group, client_id, nickname, limit, cursor) tuple
+        +count_by_group(client_id, nickname) dict
+    }
+
+    class ServerAuth {
+        +resolve_identity(headers) Identity
+        +register(client_id, nickname) dict
+        +require_author(bubble, me) None
+    }
+
+    class ServerApi {
+        <<Flask Blueprint>>
+        +health()
+        +session()
+        +list_bubbles()
+        +create_bubble()
+        +get_bubble(id)
+        +post_reply(id)
+        +get_chat(id)
+        +post_chat(id)
+        +post_resolve(id)
+        +post_save(id)
+        +get_mine()
+        +legacy_ping()
+        +legacy_bubbles()
+        +legacy_detail(id)
+        +legacy_reply(id)
+        +legacy_chat(id)
+        +legacy_resolve(id)
+        +legacy_save(id)
+    }
+
+    class RateLimiter {
+        +allow(ip) bool
+        +retry_after() int
+    }
+
+    ServerApi --> ServerAuth
+    ServerApi --> ServerStore
+    ServerApi --> RateLimiter
+    ServerApi ..> PermissionsModule : 权威判定
+    ServerStore ..> Bubble : 返回
+    ServerAuth ..> Identity : 返回
+
+    %% ===== UI 组件 =====
+    class FlowLayout {
+        +int h_spacing
+        +int v_spacing
+        +addItem(item)
+        +count() int
+        +itemAt(i) QLayoutItem
+        +takeAt(i) QLayoutItem
+        +setGeometry(rect)
+        +heightForWidth(w) int
+        +sizeHint() QSize
+        +columns_for_width(w) int
+    }
+
+    class BubbleView {
+        <<QWidget>>
+        +Bubble bubble
+        +float phase
+        +Signal clicked(str)
+        +Signal burst_finished(str)
+        +set_bubble(b)
+        +update_from(b) bool
+        +set_phase(t)
+        +set_hover(on)
+        +start_burst()
+        +paintEvent(e)
+    }
+
+    class BubbleAnimator {
+        <<QObject 全局唯一动画定时器>>
+        +Signal tick(int)
+        +register(view)
+        +unregister(view)
+        +start()
+        +stop()
+        +set_paused(on)
+    }
+
+    class Drawer {
+        <<QWidget>>
+        +Signal closed()
+        +open(widget)
+        +close()
+        +is_open() bool
+    }
+
+    class Toast {
+        <<QWidget>>
+        +Signal action_clicked()
+        +show_text(text, action_text)
+    }
+
+    class WallPage {
+        <<QWidget>>
+        +Signal open_detail(str)
+        +Signal request_publish()
+        +Signal request_more()
+        +Signal request_refresh()
+        +Signal show_mine()
+        +Signal switch_user()
+        +apply_bubbles(bubbles, total, has_more)
+        +prepend_bubble(b)
+        +remove_bubble_animated(id)
+        +set_online(on)
+        +set_filter(emotion)
+        +set_query(q)
+        -_views dict
+        -_detach(id)
+        -_create_view(b)
+        -_reorder_if_needed(ids)
+    }
+
+    class MyPage {
+        <<QWidget>>
+        +Signal open_detail(str)
+        +Signal back_to_wall()
+        +apply_group(group, bubbles)
+        +apply_counts(counts)
+    }
+
+    class PublishPage {
+        <<QWidget>>
+        +Signal submitted(dict)
+        +Signal cancelled()
+        +reset()
+        +set_submitting(on)
+        +show_error(msg)
+        +draft() dict
+    }
+
+    class DetailDrawer {
+        <<QWidget>>
+        +Signal resolve_requested(str)
+        +Signal save_requested(str, bool)
+        +Signal reply_requested(str, str)
+        +Signal open_chat(str, str)
+        +Signal closed()
+        +render(bubble, replies)
+        +set_mode(mode)
+        +flash(msg)
+    }
+
+    class ChatDrawer {
+        <<QWidget>>
+        +str peer_nickname
+        +Signal send_requested(str, str, str)
+        +Signal closed()
+        +render(bubble, peer, messages)
+        +append_message(m)
+        +set_offline(on)
+        +set_closed_bubble(on)
+    }
+
+    class AppWindow {
+        <<QMainWindow>>
+        +_goto(page)
+        +_open_drawer(w)
+        +closeEvent(e)
+    }
+
+    BubbleAnimator ..> BubbleView : tick 驱动全部
+    FlowLayout o-- BubbleView
+    WallPage *-- FlowLayout
+    WallPage o-- BubbleView
+    WallPage ..> Bubble : 渲染
+    MyPage ..> Bubble : 渲染
+    DetailDrawer ..> Bubble : 渲染
+    DetailDrawer ..> Reply : 渲染
+    ChatDrawer ..> ChatMessage : 渲染
+    DetailDrawer --> ChatDrawer : peer 由调用方传入
+    AppWindow --> WallPage
+    AppWindow --> MyPage
+    AppWindow --> PublishPage
+    AppWindow --> DetailDrawer
+    AppWindow --> ChatDrawer
+    AppWindow --> SyncManager : 信号接线
+    AppWindow ..> Drawer
+    AppWindow ..> Toast

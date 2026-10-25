@@ -1,0 +1,10 @@
+# 编辑器 / 本地工具目录（不入库）
+.idea/
+.vscode/
+.workbuddy/
+.workbuddy-ai/
+
+# 系统
+.DS_Store
+Thumbs.db
+desktop.ini
